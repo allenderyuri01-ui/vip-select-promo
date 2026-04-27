@@ -1,72 +1,84 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
+import CONFIG from "./config";
 
+// ── Helpers ──
+const formatarTel = (v) => {
+  const n = v.replace(/\D/g, "").slice(0, 11);
+  if (n.length <= 2) return n.length ? `(${n}` : "";
+  if (n.length <= 7) return `(${n.slice(0, 2)}) ${n.slice(2)}`;
+  return `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}`;
+};
 
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz6AUd4NtaW9cSXaT4hAA8PtygJYfGlX4WWH-uL0Hw1D-SgyOjLSzaVV1p0nvZJt_W5oA/exec";
+const formatarData = (v) => {
+  const n = v.replace(/\D/g, "").slice(0, 8);
+  if (n.length <= 2) return n;
+  if (n.length <= 4) return `${n.slice(0, 2)}/${n.slice(2)}`;
+  return `${n.slice(0, 2)}/${n.slice(2, 4)}/${n.slice(4)}`;
+};
 
-const entradaVazia = () => ({
-  id: Date.now() + Math.random(),
-  titularNome: "",
-  cpf: "",
-  dataNasc: "",
-  emailSmiles: "",
-  senhaSmiles: "",
-  emailLivelo: "",
-  senhaLivelo: "",
-});
+const formatarCPF = (v) => v.replace(/\D/g, "").slice(0, 11);
 
-function Input({ label, value, onChange, placeholder, type = "text", senhaKey, senhasVisiveis, toggleSenha }) {
+const formatadores = {
+  text: (v) => v,
+  cpf: formatarCPF,
+  data: formatarData,
+  email: (v) => v,
+};
+
+// ── Entrada vazia dinâmica baseada no config ──
+const criarEntradaVazia = () => {
+  const entrada = { id: Date.now() + Math.random() };
+  CONFIG.camposTitular.forEach((c) => { entrada[c.id] = ""; });
+  CONFIG.programas.forEach((p) => {
+    entrada[`email_${p.id}`] = "";
+    entrada[`senha_${p.id}`] = "";
+  });
+  return entrada;
+};
+
+// ── Input component (fora do componente principal pra evitar bug de foco) ──
+function Input({ label, value, onChange, placeholder, type = "text", senhaKey, senhasVisiveis, toggleSenha, cores }) {
   return (
-    <div style={s.field}>
-      <label style={s.label}>{label}</label>
+    <div style={styles.field}>
+      <label style={{ ...styles.label, color: cores.textoSuave }}>{label}</label>
       {senhaKey ? (
-        <div style={s.senhaWrap}>
+        <div style={styles.senhaWrap}>
           <input
-            style={{ ...s.input, paddingRight: 42 }}
+            style={{ ...styles.input, paddingRight: 42, background: cores.inputFundo, borderColor: cores.inputBorda, color: cores.texto }}
             type={senhasVisiveis[senhaKey] ? "text" : "password"}
             value={value}
             onChange={onChange}
             placeholder={placeholder}
           />
-          <button style={s.eyeBtn} onClick={() => toggleSenha(senhaKey)} type="button">
+          <button style={styles.eyeBtn} onClick={() => toggleSenha(senhaKey)} type="button">
             {senhasVisiveis[senhaKey] ? "🙈" : "👁"}
           </button>
         </div>
       ) : (
-        <input style={s.input} type={type} value={value} onChange={onChange} placeholder={placeholder} />
+        <input style={{ ...styles.input, background: cores.inputFundo, borderColor: cores.inputBorda, color: cores.texto }} type={type} value={value} onChange={onChange} placeholder={placeholder} />
       )}
     </div>
   );
 }
 
-export default function VipSelectPromo() {
+// ── Componente principal ──
+export default function App() {
   const [etapa, setEtapa] = useState("form");
   const [contato, setContato] = useState("");
   const [responsavel, setResponsavel] = useState("");
-  const [entradas, setEntradas] = useState([entradaVazia()]);
+  const [entradas, setEntradas] = useState([criarEntradaVazia()]);
   const [erroMsg, setErroMsg] = useState("");
   const [senhasVisiveis, setSenhasVisiveis] = useState({});
   const [expandido, setExpandido] = useState({});
 
-  const formatarTel = (v) => {
-    const n = v.replace(/\D/g, "").slice(0, 11);
-    if (n.length <= 2) return n.length ? `(${n}` : "";
-    if (n.length <= 7) return `(${n.slice(0, 2)}) ${n.slice(2)}`;
-    return `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}`;
-  };
-
-  const formatarData = (v) => {
-    const n = v.replace(/\D/g, "").slice(0, 8);
-    if (n.length <= 2) return n;
-    if (n.length <= 4) return `${n.slice(0, 2)}/${n.slice(2)}`;
-    return `${n.slice(0, 2)}/${n.slice(2, 4)}/${n.slice(4)}`;
-  };
+  const c = CONFIG.cores;
 
   const atualizarEntrada = (id, campo, valor) => {
     setEntradas(entradas.map((e) => (e.id === id ? { ...e, [campo]: valor } : e)));
   };
 
   const adicionarEntrada = () => {
-    const nova = entradaVazia();
+    const nova = criarEntradaVazia();
     setEntradas([...entradas, nova]);
     setExpandido((p) => ({ ...p, [nova.id]: true }));
   };
@@ -83,13 +95,15 @@ export default function VipSelectPromo() {
     if (!responsavel.trim()) return "Preencha o nome do responsável.";
     for (let i = 0; i < entradas.length; i++) {
       const e = entradas[i];
-      if (!e.titularNome.trim()) return `Conta ${i + 1}: preencha o titular.`;
-      if (e.cpf.replace(/\D/g, "").length !== 11) return `Conta ${i + 1}: CPF inválido.`;
-      if (!e.dataNasc.trim() || e.dataNasc.replace(/\D/g, "").length < 8) return `Conta ${i + 1}: data de nascimento inválida.`;
-      if (!e.emailSmiles.trim()) return `Conta ${i + 1}: preencha o email Smiles.`;
-      if (!e.senhaSmiles.trim()) return `Conta ${i + 1}: preencha a senha Smiles.`;
-      if (!e.emailLivelo.trim()) return `Conta ${i + 1}: preencha o email Livelo.`;
-      if (!e.senhaLivelo.trim()) return `Conta ${i + 1}: preencha a senha Livelo.`;
+      for (const campo of CONFIG.camposTitular) {
+        if (!e[campo.id] || !e[campo.id].trim()) return `Conta ${i + 1}: preencha ${campo.label.toLowerCase()}.`;
+        if (campo.tipo === "cpf" && e[campo.id].replace(/\D/g, "").length !== 11) return `Conta ${i + 1}: CPF inválido.`;
+        if (campo.tipo === "data" && e[campo.id].replace(/\D/g, "").length < 8) return `Conta ${i + 1}: data inválida.`;
+      }
+      for (const prog of CONFIG.programas) {
+        if (!e[`email_${prog.id}`] || !e[`email_${prog.id}`].trim()) return `Conta ${i + 1}: preencha o email ${prog.nome}.`;
+        if (!e[`senha_${prog.id}`] || !e[`senha_${prog.id}`].trim()) return `Conta ${i + 1}: preencha a senha ${prog.nome}.`;
+      }
     }
     return null;
   };
@@ -100,31 +114,39 @@ export default function VipSelectPromo() {
     setErroMsg("");
     setEtapa("enviando");
 
-    const rows = entradas.map((e) => ({
-      contato,
-      responsavel: responsavel.trim(),
-      titular: e.titularNome.trim(),
-      cpf: e.cpf.replace(/\D/g, ""),
-      senhaSmiles: e.senhaSmiles,
-      dataNasc: e.dataNasc,
-      emailSmiles: e.emailSmiles.trim(),
-      emailLivelo: e.emailLivelo.trim(),
-      senhaLivelo: e.senhaLivelo,
-    }));
+    const rows = entradas.map((e) => {
+      const row = {
+        contato,
+        responsavel: responsavel.trim(),
+      };
+      CONFIG.camposTitular.forEach((campo) => {
+        row[campo.id] = campo.tipo === "cpf" ? e[campo.id].replace(/\D/g, "") : e[campo.id];
+      });
+      CONFIG.programas.forEach((prog) => {
+        row[`email_${prog.id}`] = e[`email_${prog.id}`].trim();
+        row[`senha_${prog.id}`] = e[`senha_${prog.id}`];
+      });
+      return row;
+    });
 
-    if (!APPS_SCRIPT_URL) {
-      console.log("Payload (demo):", JSON.stringify(rows, null, 2));
+    const payload = {
+      aba: CONFIG.abaPlanilha,
+      rows,
+    };
+
+    if (!CONFIG.appsScriptUrl) {
+      console.log("Payload (demo):", JSON.stringify(payload, null, 2));
       await new Promise((r) => setTimeout(r, 1500));
       setEtapa("sucesso");
       return;
     }
 
     try {
-      await fetch(APPS_SCRIPT_URL, {
+      await fetch(CONFIG.appsScriptUrl, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows }),
+        body: JSON.stringify(payload),
       });
       setEtapa("sucesso");
     } catch {
@@ -135,46 +157,66 @@ export default function VipSelectPromo() {
   const resetar = () => {
     setContato("");
     setResponsavel("");
-    setEntradas([entradaVazia()]);
+    setEntradas([criarEntradaVazia()]);
     setSenhasVisiveis({});
     setExpandido({});
     setErroMsg("");
     setEtapa("form");
   };
 
+  // ── Gera preview da conta pra exibir quando colapsada ──
+  const getPreview = (ent) => {
+    return CONFIG.programas
+      .map((p) => ent[`email_${p.id}`] ? `${p.nome}: ${ent[`email_${p.id}`]}` : "")
+      .filter(Boolean)
+      .join(" · ");
+  };
+
+  const getNomeConta = (ent, idx) => {
+    const titular = CONFIG.camposTitular.find((ct) => ct.id === "titularNome");
+    if (titular && ent[titular.id]) return ent[titular.id];
+    return `Conta ${idx + 1}`;
+  };
+
   return (
-    <div style={s.page}>
+    <div style={{ ...styles.page, background: c.fundo, color: c.texto }}>
       <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-      {/* Decorative top band */}
-      <div style={s.topBand}>
-        <div style={s.bandPattern} />
+      <div style={{ ...styles.topBand, background: `linear-gradient(90deg, ${c.primaria}, ${c.destaque}, ${c.primaria})` }}>
+        <div style={styles.bandPattern} />
       </div>
 
       {/* Hero */}
-      <section style={s.hero}>
-        <div style={s.promoTag}>Promoção Exclusiva</div>
-        <h1 style={s.title}>
-          Cadastre suas<br /><span style={s.titleAccent}>contas</span>
+      <section style={styles.hero}>
+        <div style={{ ...styles.promoTag, background: c.primaria, color: c.destaque }}>Promoção Exclusiva</div>
+        <h1 style={{ ...styles.title, color: c.primaria }}>
+          {CONFIG.titulo}<br />
+          <span style={{ ...styles.titleAccent, color: c.destaque }}>{CONFIG.tituloDestaque}</span>
         </h1>
-        <p style={s.subtitle}>
-          Preencha os dados das suas contas <strong>Smiles</strong> e <strong>Livelo</strong> de forma rápida e segura.
-        </p>
-        <div style={s.chips}>
-          <span style={s.chipSmiles}>😊 Smiles</span>
-          <span style={s.chipLivelo}>💎 Livelo</span>
+        <p style={{ ...styles.subtitle, color: c.textoSuave }}>{CONFIG.subtitulo}</p>
+        <div style={styles.chips}>
+          {CONFIG.programas.map((p) => (
+            <span key={p.id} style={{
+              ...styles.chip,
+              background: p.cor + "12",
+              color: p.cor,
+              borderColor: p.cor + "30",
+            }}>
+              {p.emoji} {p.nome}
+            </span>
+          ))}
         </div>
       </section>
 
       {etapa === "form" && (
-        <section style={s.formWrap}>
+        <section style={styles.formWrap}>
           {/* Responsável */}
-          <div style={s.card}>
-            <div style={s.cardIcon}>👤</div>
-            <h2 style={s.cardTitle}>Responsável</h2>
-            <div style={s.cardGrid2}>
-              <Input label="Nome do responsável" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Seu nome" />
-              <Input label="Contato (WhatsApp)" value={contato} onChange={(e) => setContato(formatarTel(e.target.value))} placeholder="(21) 99999-9999" />
+          <div style={{ ...styles.card, background: c.cardFundo }}>
+            <div style={styles.cardIcon}>👤</div>
+            <h2 style={{ ...styles.cardTitle, color: c.texto }}>Responsável</h2>
+            <div style={styles.cardGrid2}>
+              <Input label="Nome do responsável" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Seu nome" cores={c} />
+              <Input label="Contato (WhatsApp)" value={contato} onChange={(e) => setContato(formatarTel(e.target.value))} placeholder="(21) 99999-9999" cores={c} />
             </div>
           </div>
 
@@ -182,119 +224,128 @@ export default function VipSelectPromo() {
           {entradas.map((ent, idx) => {
             const isOpen = expandido[ent.id] !== false;
             return (
-              <div key={ent.id} style={s.card}>
-                <div style={s.contaHeaderRow} onClick={() => toggleExpand(ent.id)}>
-                  <div style={s.contaHeaderLeft}>
-                    <div style={s.contaNum}>{idx + 1}</div>
+              <div key={ent.id} style={{ ...styles.card, background: c.cardFundo }}>
+                <div style={styles.contaHeaderRow} onClick={() => toggleExpand(ent.id)}>
+                  <div style={styles.contaHeaderLeft}>
+                    <div style={{ ...styles.contaNum, background: c.destaque, color: c.primaria }}>{idx + 1}</div>
                     <div>
-                      <h2 style={s.cardTitle2}>
-                        {ent.titularNome || `Conta ${idx + 1}`}
-                      </h2>
-                      {!isOpen && ent.titularNome && (
-                        <span style={s.contaPreview}>
-                          {ent.emailSmiles && `Smiles: ${ent.emailSmiles}`}
-                          {ent.emailSmiles && ent.emailLivelo && " · "}
-                          {ent.emailLivelo && `Livelo: ${ent.emailLivelo}`}
-                        </span>
-                      )}
+                      <h2 style={{ ...styles.cardTitle2, color: c.texto }}>{getNomeConta(ent, idx)}</h2>
+                      {!isOpen && <span style={styles.contaPreview}>{getPreview(ent)}</span>}
                     </div>
                   </div>
-                  <div style={s.contaActions}>
+                  <div style={styles.contaActions}>
                     {entradas.length > 1 && (
-                      <button style={s.removeBtn} onClick={(ev) => { ev.stopPropagation(); removerEntrada(ent.id); }}>✕</button>
+                      <button style={styles.removeBtn} onClick={(ev) => { ev.stopPropagation(); removerEntrada(ent.id); }}>✕</button>
                     )}
-                    <span style={{ ...s.chevron, transform: isOpen ? "rotate(180deg)" : "rotate(0)" }}>▾</span>
+                    <span style={{ ...styles.chevron, transform: isOpen ? "rotate(180deg)" : "rotate(0)" }}>▾</span>
                   </div>
                 </div>
 
                 {isOpen && (
-                  <div style={s.contaBody}>
-                    {/* Dados pessoais */}
-                    <div style={s.sectionLabel}>
-                      <span style={s.sectionDot} />
+                  <div style={styles.contaBody}>
+                    {/* Dados do titular */}
+                    <div style={styles.sectionLabel}>
+                      <span style={{ ...styles.sectionDot, background: c.primaria }} />
                       Dados do titular
                     </div>
-                    <div style={s.cardGrid3}>
-                      <Input label="Nome do titular" value={ent.titularNome} onChange={(e) => atualizarEntrada(ent.id, "titularNome", e.target.value)} placeholder="Nome completo" />
-                      <Input label="CPF (só números)" value={ent.cpf} onChange={(e) => atualizarEntrada(ent.id, "cpf", e.target.value.replace(/\D/g, "").slice(0, 11))} placeholder="00000000000" />
-                      <Input label="Data de nascimento" value={ent.dataNasc} onChange={(e) => atualizarEntrada(ent.id, "dataNasc", formatarData(e.target.value))} placeholder="DD/MM/AAAA" />
+                    <div style={styles.cardGrid3}>
+                      {CONFIG.camposTitular.map((campo) => (
+                        <Input
+                          key={campo.id}
+                          label={campo.label}
+                          value={ent[campo.id]}
+                          onChange={(e) => atualizarEntrada(ent.id, campo.id, (formatadores[campo.tipo] || formatadores.text)(e.target.value))}
+                          placeholder={campo.placeholder}
+                          cores={c}
+                        />
+                      ))}
                     </div>
 
-                    {/* Smiles */}
-                    <div style={s.sectionLabel}>
-                      <span style={{ ...s.sectionDot, background: "#FF6600" }} />
-                      Smiles
-                    </div>
-                    <div style={s.cardGrid2}>
-                      <Input label="Email da conta" value={ent.emailSmiles} onChange={(e) => atualizarEntrada(ent.id, "emailSmiles", e.target.value)} placeholder="email@smiles.com" />
-                      <Input label="Senha" value={ent.senhaSmiles} onChange={(e) => atualizarEntrada(ent.id, "senhaSmiles", e.target.value)} placeholder="••••••••" senhaKey={`smiles-${ent.id}`} senhasVisiveis={senhasVisiveis} toggleSenha={toggleSenha} />
-                    </div>
-
-                    {/* Livelo */}
-                    <div style={s.sectionLabel}>
-                      <span style={{ ...s.sectionDot, background: "#6B2D8B" }} />
-                      Livelo
-                    </div>
-                    <div style={s.cardGrid2}>
-                      <Input label="Email da conta" value={ent.emailLivelo} onChange={(e) => atualizarEntrada(ent.id, "emailLivelo", e.target.value)} placeholder="email@livelo.com" />
-                      <Input label="Senha" value={ent.senhaLivelo} onChange={(e) => atualizarEntrada(ent.id, "senhaLivelo", e.target.value)} placeholder="••••••••" senhaKey={`livelo-${ent.id}`} senhasVisiveis={senhasVisiveis} toggleSenha={toggleSenha} />
-                    </div>
+                    {/* Programas dinâmicos */}
+                    {CONFIG.programas.map((prog) => (
+                      <div key={prog.id}>
+                        <div style={styles.sectionLabel}>
+                          <span style={{ ...styles.sectionDot, background: prog.cor }} />
+                          {prog.nome}
+                        </div>
+                        <div style={styles.cardGrid2}>
+                          <Input
+                            label="Email da conta"
+                            value={ent[`email_${prog.id}`]}
+                            onChange={(e) => atualizarEntrada(ent.id, `email_${prog.id}`, e.target.value)}
+                            placeholder={`email@${prog.id}.com`}
+                            cores={c}
+                          />
+                          <Input
+                            label="Senha"
+                            value={ent[`senha_${prog.id}`]}
+                            onChange={(e) => atualizarEntrada(ent.id, `senha_${prog.id}`, e.target.value)}
+                            placeholder="••••••••"
+                            senhaKey={`${prog.id}-${ent.id}`}
+                            senhasVisiveis={senhasVisiveis}
+                            toggleSenha={toggleSenha}
+                            cores={c}
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             );
           })}
 
-          <button style={s.addBtn} onClick={adicionarEntrada}>
-            <span style={s.addPlus}>+</span>
+          <button style={{ ...styles.addBtn, background: c.cardFundo }} onClick={adicionarEntrada}>
+            <span style={{ ...styles.addPlus, background: c.destaque, color: c.primaria }}>+</span>
             Adicionar outra conta
           </button>
 
-          {erroMsg && <div style={s.erroBox}>⚠ {erroMsg}</div>}
+          {erroMsg && <div style={{ ...styles.erroBox, color: c.erroCor }}>⚠ {erroMsg}</div>}
 
-          <button style={s.submitBtn} onClick={enviar}>
+          <button style={{ ...styles.submitBtn, background: c.primaria, color: c.destaque }} onClick={enviar}>
             Enviar cadastro
-            <span style={s.arrow}>→</span>
+            <span style={styles.arrow}>→</span>
           </button>
-          <p style={s.disclaimer}>🔒 Dados enviados com segurança direto para a equipe Milhas Plus.</p>
+          <p style={styles.disclaimer}>🔒 Dados enviados com segurança direto para a equipe {CONFIG.empresa}.</p>
         </section>
       )}
 
       {etapa === "enviando" && (
-        <div style={s.statusBox}>
-          <div style={s.spinner} />
-          <h2 style={s.statusTitle}>Enviando...</h2>
-          <p style={s.statusSub}>Aguarde um instante</p>
+        <div style={styles.statusBox}>
+          <div style={{ ...styles.spinner, borderTopColor: c.primaria }} />
+          <h2 style={{ ...styles.statusTitle, color: c.texto }}>Enviando...</h2>
+          <p style={{ ...styles.statusSub, color: c.textoSuave }}>Aguarde um instante</p>
         </div>
       )}
 
       {etapa === "sucesso" && (
-        <div style={s.statusBox}>
-          <div style={s.successIcon}>✓</div>
-          <h2 style={s.statusTitle}>Cadastro enviado!</h2>
-          <p style={s.statusSub}>{entradas.length} conta{entradas.length > 1 ? "s" : ""} registrada{entradas.length > 1 ? "s" : ""}. Fique atento ao WhatsApp.</p>
-          <button style={s.resetBtn} onClick={resetar}>Novo cadastro</button>
+        <div style={styles.statusBox}>
+          <div style={{ ...styles.successIcon, background: c.destaque + "30", color: c.primaria }}>✓</div>
+          <h2 style={{ ...styles.statusTitle, color: c.texto }}>Cadastro enviado!</h2>
+          <p style={{ ...styles.statusSub, color: c.textoSuave }}>
+            {entradas.length} conta{entradas.length > 1 ? "s" : ""} registrada{entradas.length > 1 ? "s" : ""}. Fique atento ao WhatsApp.
+          </p>
+          <button style={{ ...styles.resetBtn, background: c.destaque, color: c.primaria }} onClick={resetar}>Novo cadastro</button>
         </div>
       )}
 
       {etapa === "erro" && (
-        <div style={s.statusBox}>
-          <div style={{ ...s.successIcon, background: "#fee", color: "#c00" }}>!</div>
-          <h2 style={s.statusTitle}>Erro no envio</h2>
-          <p style={s.statusSub}>Tente novamente ou fale conosco pelo WhatsApp.</p>
-          <button style={s.resetBtn} onClick={() => setEtapa("form")}>Tentar novamente</button>
+        <div style={styles.statusBox}>
+          <div style={{ ...styles.successIcon, background: "#fee", color: "#c00" }}>!</div>
+          <h2 style={{ ...styles.statusTitle, color: c.texto }}>Erro no envio</h2>
+          <p style={{ ...styles.statusSub, color: c.textoSuave }}>Tente novamente ou fale conosco pelo WhatsApp.</p>
+          <button style={{ ...styles.resetBtn, background: c.destaque, color: c.primaria }} onClick={() => setEtapa("form")}>Tentar novamente</button>
         </div>
       )}
 
-      <footer style={s.footer}>Milhas Plus © 2026 · VIP Select Promo</footer>
+      <footer style={styles.footer}>{CONFIG.rodape}</footer>
 
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
         input::placeholder { color: #a0a0a0; }
-        input:focus { outline: none; border-color: #1A3C34 !important; box-shadow: 0 0 0 3px #1A3C3412; }
+        input:focus { outline: none; border-color: ${c.primaria} !important; box-shadow: 0 0 0 3px ${c.primaria}12; }
         button { cursor: pointer; transition: all .15s; }
         button:active { transform: scale(0.97); }
       `}</style>
@@ -302,17 +353,15 @@ export default function VipSelectPromo() {
   );
 }
 
-const s = {
+// ── Estilos ──
+const styles = {
   page: {
     minHeight: "100vh",
-    background: "#FAFAF6",
     fontFamily: "'Plus Jakarta Sans', sans-serif",
-    color: "#1A3C34",
     position: "relative",
   },
   topBand: {
     height: 6,
-    background: "linear-gradient(90deg, #1A3C34, #F2D645, #1A3C34)",
     position: "relative",
     overflow: "hidden",
   },
@@ -321,16 +370,13 @@ const s = {
     inset: 0,
     background: "repeating-linear-gradient(90deg, transparent, transparent 40px, #ffffff20 40px, #ffffff20 42px)",
   },
-
   hero: {
     textAlign: "center",
-    padding: "32px 24px 28px",
+    padding: "40px 24px 28px",
     animation: "fadeUp .5s ease-out",
   },
   promoTag: {
     display: "inline-block",
-    background: "#1A3C34",
-    color: "#F2D645",
     fontSize: 11,
     fontWeight: 700,
     padding: "5px 16px",
@@ -345,17 +391,14 @@ const s = {
     fontWeight: 800,
     lineHeight: 1.05,
     letterSpacing: "-0.03em",
-    color: "#1A3C34",
     marginBottom: 12,
   },
   titleAccent: {
-    color: "#F2D645",
     textShadow: "1px 1px 0 #1A3C3425",
     fontSize: 48,
   },
   subtitle: {
     fontSize: 15,
-    color: "#4a6a60",
     maxWidth: 380,
     margin: "0 auto 18px",
     lineHeight: 1.6,
@@ -363,63 +406,43 @@ const s = {
   },
   chips: {
     display: "flex",
+    flexWrap: "wrap",
     justifyContent: "center",
     gap: 10,
   },
-  chipSmiles: {
+  chip: {
     fontSize: 13,
     fontWeight: 600,
     padding: "7px 16px",
     borderRadius: 20,
-    background: "#FF660012",
-    color: "#CC5200",
-    border: "1px solid #FF660030",
+    border: "1px solid",
   },
-  chipLivelo: {
-    fontSize: 13,
-    fontWeight: 600,
-    padding: "7px 16px",
-    borderRadius: 20,
-    background: "#6B2D8B12",
-    color: "#6B2D8B",
-    border: "1px solid #6B2D8B30",
-  },
-
   formWrap: {
     maxWidth: 580,
     margin: "0 auto",
     padding: "0 16px 40px",
     animation: "fadeUp .5s ease-out .15s both",
   },
-
   card: {
-    background: "#fff",
     borderRadius: 14,
     padding: "22px 22px 18px",
     marginBottom: 14,
     border: "1px solid #e8e5dd",
     boxShadow: "0 1px 3px #0000000a",
   },
-  cardIcon: {
-    fontSize: 20,
-    marginBottom: 6,
-  },
+  cardIcon: { fontSize: 20, marginBottom: 6 },
   cardTitle: {
     fontFamily: "'Sora', sans-serif",
     fontSize: 16,
     fontWeight: 700,
-    color: "#1A3C34",
     marginBottom: 16,
   },
   cardTitle2: {
     fontFamily: "'Sora', sans-serif",
     fontSize: 15,
     fontWeight: 700,
-    color: "#1A3C34",
     margin: 0,
   },
-
-  // Conta header
   contaHeaderRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -436,8 +459,6 @@ const s = {
     width: 32,
     height: 32,
     borderRadius: 8,
-    background: "#F2D645",
-    color: "#1A3C34",
     fontFamily: "'Sora', sans-serif",
     fontWeight: 800,
     fontSize: 14,
@@ -475,13 +496,11 @@ const s = {
     justifyContent: "center",
     cursor: "pointer",
   },
-
   contaBody: {
     marginTop: 18,
     paddingTop: 16,
     borderTop: "1px solid #f0ede6",
   },
-
   sectionLabel: {
     display: "flex",
     alignItems: "center",
@@ -498,10 +517,8 @@ const s = {
     width: 8,
     height: 8,
     borderRadius: 4,
-    background: "#1A3C34",
     display: "inline-block",
   },
-
   cardGrid2: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
@@ -510,11 +527,10 @@ const s = {
   },
   cardGrid3: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
     gap: 12,
     marginBottom: 8,
   },
-
   field: {
     display: "flex",
     flexDirection: "column",
@@ -523,24 +539,19 @@ const s = {
   label: {
     fontSize: 11,
     fontWeight: 600,
-    color: "#7a8a84",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
   },
   input: {
     width: "100%",
     padding: "11px 12px",
-    background: "#FAFAF6",
-    border: "1.5px solid #e0ddd5",
+    border: "1.5px solid",
     borderRadius: 8,
-    color: "#1A3C34",
     fontSize: 14,
     fontFamily: "'Plus Jakarta Sans', sans-serif",
     transition: "all .2s",
   },
-  senhaWrap: {
-    position: "relative",
-  },
+  senhaWrap: { position: "relative" },
   eyeBtn: {
     position: "absolute",
     right: 8,
@@ -551,11 +562,9 @@ const s = {
     fontSize: 14,
     padding: 4,
   },
-
   addBtn: {
     width: "100%",
     padding: 14,
-    background: "#fff",
     border: "2px dashed #d4d0c8",
     borderRadius: 12,
     color: "#6a8a80",
@@ -572,8 +581,6 @@ const s = {
     width: 24,
     height: 24,
     borderRadius: 6,
-    background: "#F2D645",
-    color: "#1A3C34",
     fontWeight: 800,
     fontSize: 16,
     display: "flex",
@@ -581,7 +588,6 @@ const s = {
     justifyContent: "center",
     lineHeight: 1,
   },
-
   erroBox: {
     background: "#fef2f2",
     border: "1px solid #fecaca",
@@ -589,17 +595,13 @@ const s = {
     padding: "11px 16px",
     marginBottom: 14,
     fontSize: 13,
-    color: "#dc2626",
     fontWeight: 500,
   },
-
   submitBtn: {
     width: "100%",
     padding: "16px 24px",
-    background: "#1A3C34",
     border: "none",
     borderRadius: 12,
-    color: "#F2D645",
     fontSize: 16,
     fontFamily: "'Sora', sans-serif",
     fontWeight: 700,
@@ -610,10 +612,7 @@ const s = {
     letterSpacing: "0.01em",
     boxShadow: "0 4px 16px #1A3C3440",
   },
-  arrow: {
-    fontSize: 20,
-    fontWeight: 400,
-  },
+  arrow: { fontSize: 20, fontWeight: 400 },
   disclaimer: {
     textAlign: "center",
     fontSize: 12,
@@ -621,7 +620,6 @@ const s = {
     marginTop: 14,
     lineHeight: 1.5,
   },
-
   statusBox: {
     maxWidth: 400,
     margin: "60px auto",
@@ -633,7 +631,6 @@ const s = {
     width: 44,
     height: 44,
     border: "3px solid #e0ddd5",
-    borderTopColor: "#1A3C34",
     borderRadius: "50%",
     margin: "0 auto 20px",
     animation: "spin .7s linear infinite",
@@ -642,8 +639,6 @@ const s = {
     width: 60,
     height: 60,
     borderRadius: "50%",
-    background: "#F2D64530",
-    color: "#1A3C34",
     fontSize: 26,
     fontWeight: 800,
     display: "flex",
@@ -655,26 +650,21 @@ const s = {
     fontFamily: "'Sora', sans-serif",
     fontSize: 20,
     fontWeight: 700,
-    color: "#1A3C34",
     marginBottom: 6,
   },
   statusSub: {
     fontSize: 14,
-    color: "#6a8a80",
     lineHeight: 1.6,
   },
   resetBtn: {
     marginTop: 22,
     padding: "11px 28px",
-    background: "#F2D645",
     border: "none",
     borderRadius: 10,
-    color: "#1A3C34",
     fontSize: 14,
     fontFamily: "'Plus Jakarta Sans', sans-serif",
     fontWeight: 700,
   },
-
   footer: {
     textAlign: "center",
     padding: "28px 20px",
