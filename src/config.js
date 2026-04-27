@@ -17,6 +17,8 @@ const CONFIG = {
   permitirImportacao: true,
   permitirConsulta: true,
 
+  programas: [ ],
+
   camposTitular: [
     { id: "titularNome", label: "Nome do titular",       placeholder: "Nome completo",    tipo: "text" },
     { id: "cpf",         label: "CPF (só números)",      placeholder: "00000000000",      tipo: "cpf" },
