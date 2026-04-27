@@ -17,10 +17,7 @@ const CONFIG = {
   permitirImportacao: true,
   permitirConsulta: true,
 
-  programas: [
-    { id: "smiles", nome: "Smiles", emoji: "😊", cor: "#FF6600" },
-    { id: "livelo", nome: "Livelo", emoji: "💎", cor: "#6B2D8B" },
-  ],
+  programas:
 
   camposTitular: [
     { id: "titularNome", label: "Nome do titular",       placeholder: "Nome completo",    tipo: "text" },
