@@ -12,12 +12,19 @@ const CONFIG = {
   subtitulo: "Preencha os dados das suas contas de forma rápida e segura.",
   rodape: "Milhas Plus © 2026",
 
+  // ── MENSAGENS ──
+  mensagemSucesso: "Suas contas foram registradas com sucesso!",
+
   // ── APPS SCRIPT ──
   appsScriptUrl: "https://script.google.com/macros/s/AKfycbzxLDAPGMmHHQYL7pOO7owzqNJkL9dCyBCFMK84Hg0quGoO7Wjl-XkfPhjkyS85ZWSD/exec",
   
   // ── ABA DA PLANILHA ──
   // Mude isso a cada promoção nova. O Apps Script cria a aba automaticamente.
   abaPlanilha: "Promo Smiles Abr26",
+
+  // ── IMPORTAÇÃO EM MASSA ──
+  // Se true, mostra a aba "Importar planilha" além do formulário manual
+  permitirImportacao: true,
 
   // ── PROGRAMAS ──
   // Cada programa vira uma seção no formulário com campos de email + senha
