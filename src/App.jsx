@@ -236,7 +236,7 @@ export default function App() {
           {modo === "manual" && (<>
             <div style={{ ...st.card, background: c.cardFundo }}>
               <div style={st.cardIcon}>👤</div><h2 style={{ ...st.cardTitle, color: c.texto }}>Responsável</h2>
-              <div style={st.cardGrid2}>
+              <div className="grid2" style={st.cardGrid2}>
                 <Input label="Nome do responsável" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Seu nome" cores={c} />
                 <Input label="Contato (WhatsApp)" value={contato} onChange={(e) => setContato(formatarTel(e.target.value))} placeholder="(21) 99999-9999" cores={c} />
               </div>
@@ -250,8 +250,8 @@ export default function App() {
                 </div>
                 {isOpen && (<div style={st.contaBody}>
                   <div style={st.sectionLabel}><span style={{ ...st.sectionDot, background: c.primaria }} />Dados do titular</div>
-                  <div style={st.cardGrid3}>{CONFIG.camposTitular.map((campo) => (<Input key={campo.id} label={campo.label} value={ent[campo.id]} onChange={(e) => atualizarEntrada(ent.id, campo.id, (formatadores[campo.tipo] || formatadores.text)(e.target.value))} placeholder={campo.placeholder} cores={c} />))}</div>
-                  {CONFIG.programas.map((prog) => (<div key={prog.id}><div style={st.sectionLabel}><span style={{ ...st.sectionDot, background: prog.cor }} />{prog.nome}</div><div style={st.cardGrid2}><Input label="Email da conta" value={ent[`email_${prog.id}`]} onChange={(e) => atualizarEntrada(ent.id, `email_${prog.id}`, e.target.value)} placeholder={`email@${prog.id}.com`} cores={c} /><Input label="Senha" value={ent[`senha_${prog.id}`]} onChange={(e) => atualizarEntrada(ent.id, `senha_${prog.id}`, e.target.value)} placeholder="••••••••" senhaKey={`${prog.id}-${ent.id}`} senhasVisiveis={senhasVisiveis} toggleSenha={toggleSenha} cores={c} /></div></div>))}
+                  <div className="grid3" style={st.cardGrid3}>{CONFIG.camposTitular.map((campo) => (<Input key={campo.id} label={campo.label} value={ent[campo.id]} onChange={(e) => atualizarEntrada(ent.id, campo.id, (formatadores[campo.tipo] || formatadores.text)(e.target.value))} placeholder={campo.placeholder} cores={c} />))}</div>
+                  {CONFIG.programas.map((prog) => (<div key={prog.id}><div style={st.sectionLabel}><span style={{ ...st.sectionDot, background: prog.cor }} />{prog.nome}</div><div className="grid2" style={st.cardGrid2}><Input label="Email da conta" value={ent[`email_${prog.id}`]} onChange={(e) => atualizarEntrada(ent.id, `email_${prog.id}`, e.target.value)} placeholder={`email@${prog.id}.com`} cores={c} /><Input label="Senha" value={ent[`senha_${prog.id}`]} onChange={(e) => atualizarEntrada(ent.id, `senha_${prog.id}`, e.target.value)} placeholder="••••••••" senhaKey={`${prog.id}-${ent.id}`} senhasVisiveis={senhasVisiveis} toggleSenha={toggleSenha} cores={c} /></div></div>))}
                 </div>)}
               </div>);
             })}
@@ -296,7 +296,7 @@ export default function App() {
               {rowsParaEnviar.map((row, ri) => (<tr key={ri}>{COLUNAS.map((col, ci) => (<td key={ci} style={st.previewTd}>{row[col.key] || "—"}</td>))}</tr>))}
             </tbody></table></div>
           </div>
-          <div style={{ display: "flex", gap: 10 }}>
+          <div className="review-buttons" style={{ display: "flex", gap: 10 }}>
             <button style={{ ...st.submitBtn, flex: 1, background: "#e8e5dd", color: c.texto, boxShadow: "none" }} onClick={() => setEtapa("form")}>← Voltar</button>
             <button style={{ ...st.submitBtn, flex: 2, background: c.primaria, color: c.destaque }} onClick={confirmarEnvio}>Confirmar envio ({qtdEnviada})<span style={st.arrow}>→</span></button>
           </div>
@@ -309,7 +309,7 @@ export default function App() {
           <div style={{ ...st.card, background: c.cardFundo }}>
             <h2 style={{ ...st.cardTitle, color: c.texto }}>🔍 Consultar cadastro</h2>
             <p style={{ ...st.importDesc, color: c.textoSuave }}>Busque por CPF ou nome do responsável para visualizar e corrigir dados.</p>
-            <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+            <div className="search-bar" style={{ display: "flex", gap: 10, marginBottom: 14 }}>
               <input style={{ ...st.input, flex: 1, background: c.inputFundo, borderColor: c.inputBorda, color: c.texto }}
                 placeholder="CPF ou nome do responsável" value={consultaBusca}
                 onChange={(e) => setConsultaBusca(e.target.value)}
@@ -335,7 +335,24 @@ export default function App() {
       {etapa === "erro" && (<div style={st.statusBox}><div style={{ ...st.successIcon, background: "#fee", color: "#c00" }}>!</div><h2 style={{ ...st.statusTitle, color: c.texto }}>Erro no envio</h2><p style={{ ...st.statusSub, color: c.textoSuave }}>Tente novamente ou entre em contato.</p><button style={{ ...st.resetBtn, background: c.destaque, color: c.primaria }} onClick={() => setEtapa("form")}>Tentar novamente</button></div>)}
 
       <footer style={st.footer}>{CONFIG.rodape}</footer>
-      <style>{`* { box-sizing: border-box; margin: 0; padding: 0; } @keyframes spin { to { transform: rotate(360deg); } } @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } } input::placeholder, textarea::placeholder { color: #a0a0a0; } input:focus, textarea:focus { outline: none; border-color: ${c.primaria} !important; box-shadow: 0 0 0 3px ${c.primaria}12; } button { cursor: pointer; transition: all .15s; } button:active { transform: scale(0.97); } button:disabled { cursor: not-allowed; }`}</style>
+      <style>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+        input::placeholder, textarea::placeholder { color: #a0a0a0; }
+        input:focus, textarea:focus { outline: none; border-color: ${c.primaria} !important; box-shadow: 0 0 0 3px ${c.primaria}12; }
+        button { cursor: pointer; transition: all .15s; }
+        button:active { transform: scale(0.97); }
+        button:disabled { cursor: not-allowed; }
+        @media (max-width: 600px) {
+          h1 { font-size: 28px !important; }
+          h1 span { font-size: 36px !important; }
+          .grid2 { grid-template-columns: 1fr !important; }
+          .grid3 { grid-template-columns: 1fr !important; }
+          .review-buttons { flex-direction: column !important; }
+          .search-bar { flex-direction: column !important; }
+        }
+      `}</style>
     </div>
   );
 }
