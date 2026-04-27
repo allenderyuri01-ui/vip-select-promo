@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import CONFIG from "./config";
 
 // ── Helpers ──
@@ -16,7 +16,6 @@ const validarCelula = (valor, tipo) => {
   return null;
 };
 
-// ── Colunas na ordem correta (usada em import, revisão e envio) ──
 const gerarColunas = () => {
   const cols = [
     { key: "contato", label: "CONTATO", tipo: "text" },
@@ -37,32 +36,72 @@ const criarEntradaVazia = () => {
   CONFIG.programas.forEach((p) => { e[`email_${p.id}`] = ""; e[`senha_${p.id}`] = ""; });
   return e;
 };
-
-// ── Converte row object pra array na ordem das COLUNAS ──
 const rowParaArray = (row) => COLUNAS.map((col) => row[col.key] || "");
 
+const gerarToken = () => {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let t = "";
+  for (let i = 0; i < 8; i++) t += chars[Math.floor(Math.random() * chars.length)];
+  return t;
+};
+
+const API = CONFIG.appsScriptUrl;
+const apiGet = async (params) => {
+  const url = `${API}?${new URLSearchParams(params)}`;
+  const res = await fetch(url);
+  return res.json();
+};
+const apiPost = async (body) => {
+  const res = await fetch(API, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+};
+const apiPostNoReply = async (body) => {
+  await fetch(API, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+};
+
+// ── Input ──
 function Input({ label, value, onChange, placeholder, type = "text", senhaKey, senhasVisiveis, toggleSenha, cores, erro }) {
   const temErro = !!erro;
+  const c = cores;
   return (
     <div style={st.field}>
-      <label style={{ ...st.label, color: temErro ? cores.erroCor : cores.textoSuave }}>{label}</label>
+      <label style={{ ...st.label, color: temErro ? c.erroCor : c.textoSuave }}>{label}</label>
       {senhaKey ? (
         <div style={st.senhaWrap}>
-          <input style={{ ...st.input, paddingRight: 42, background: cores.inputFundo, borderColor: temErro ? cores.erroCor : cores.inputBorda, color: cores.texto }}
+          <input style={{ ...st.input, paddingRight: 42, background: c.inputFundo, borderColor: temErro ? c.erroCor : c.inputBorda, color: c.texto }}
             type={senhasVisiveis[senhaKey] ? "text" : "password"} value={value} onChange={onChange} placeholder={placeholder} />
           <button style={st.eyeBtn} onClick={() => toggleSenha(senhaKey)} type="button">{senhasVisiveis[senhaKey] ? "🙈" : "👁"}</button>
         </div>
       ) : (
-        <input style={{ ...st.input, background: cores.inputFundo, borderColor: temErro ? cores.erroCor : cores.inputBorda, color: cores.texto }} type={type} value={value} onChange={onChange} placeholder={placeholder} />
+        <input style={{ ...st.input, background: c.inputFundo, borderColor: temErro ? c.erroCor : c.inputBorda, color: c.texto }} type={type} value={value} onChange={onChange} placeholder={placeholder} />
       )}
-      {temErro && <span style={{ fontSize: 11, color: cores.erroCor, marginTop: 2 }}>{erro}</span>}
+      {temErro && <span style={{ fontSize: 11, color: c.erroCor, marginTop: 2 }}>{erro}</span>}
     </div>
   );
 }
 
+// ══════════════════════════
+// APP PRINCIPAL
+// ══════════════════════════
 export default function App() {
-  const [etapa, setEtapa] = useState("form");
+  // ── Telas: loading | fechado | form | revisao | enviando | sucesso | erro | consulta | admin-login | admin ──
+  const [tela, setTela] = useState("loading");
   const [modo, setModo] = useState("manual");
+
+  // Promo atual (vem do token)
+  const [promoAtual, setPromoAtual] = useState(null);
+  const [tokenAtual, setTokenAtual] = useState("");
+
+  // Form state
   const [contato, setContato] = useState("");
   const [responsavel, setResponsavel] = useState("");
   const [entradas, setEntradas] = useState([criarEntradaVazia()]);
@@ -74,14 +113,122 @@ export default function App() {
   const [previewErros, setPreviewErros] = useState([]);
   const [qtdEnviada, setQtdEnviada] = useState(0);
   const [rowsParaEnviar, setRowsParaEnviar] = useState([]);
+
+  // Consulta
   const [consultaBusca, setConsultaBusca] = useState("");
   const [consultaResultado, setConsultaResultado] = useState(null);
   const [consultaCarregando, setConsultaCarregando] = useState(false);
   const [consultaErro, setConsultaErro] = useState("");
   const [consultaSucesso, setConsultaSucesso] = useState("");
 
+  // Admin
+  const [adminSenha, setAdminSenha] = useState("");
+  const [adminLogado, setAdminLogado] = useState(false);
+  const [adminErro, setAdminErro] = useState("");
+  const [promos, setPromos] = useState([]);
+  const [novaPromoNome, setNovaPromoNome] = useState("");
+  const [adminCarregando, setAdminCarregando] = useState(false);
+  const [copiado, setCopiado] = useState("");
+
   const c = CONFIG.cores;
 
+  // ── Init: checa URL ──
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("t");
+    const admin = params.get("admin");
+
+    if (token) {
+      setTokenAtual(token);
+      validarToken(token);
+    } else if (admin !== null) {
+      setTela("admin-login");
+    } else {
+      setTela("fechado");
+    }
+  }, []);
+
+  const validarToken = async (token) => {
+    try {
+      const data = await apiGet({ action: "validar_token", token });
+      if (data.valido) {
+        setPromoAtual(data.promo);
+        setTela("form");
+      } else {
+        setTela("fechado");
+      }
+    } catch {
+      setTela("fechado");
+    }
+  };
+
+  // ══════ ADMIN ══════
+  const adminLogin = async () => {
+    setAdminErro("");
+    setAdminCarregando(true);
+    try {
+      const data = await apiGet({ action: "admin_login", senha: adminSenha });
+      if (data.ok) {
+        setAdminLogado(true);
+        setTela("admin");
+        listarPromos();
+      } else {
+        setAdminErro("Senha incorreta.");
+      }
+    } catch {
+      setAdminErro("Erro de conexão.");
+    }
+    setAdminCarregando(false);
+  };
+
+  const listarPromos = async () => {
+    setAdminCarregando(true);
+    try {
+      const data = await apiGet({ action: "listar_promos", senha: adminSenha });
+      setPromos(data.promos || []);
+    } catch { }
+    setAdminCarregando(false);
+  };
+
+  const criarPromo = async () => {
+    if (!novaPromoNome.trim()) return;
+    setAdminCarregando(true);
+    const token = gerarToken();
+    try {
+      await apiPost({
+        action: "criar_promo",
+        senha: adminSenha,
+        nome: novaPromoNome.trim(),
+        token,
+      });
+      setNovaPromoNome("");
+      await listarPromos();
+    } catch { }
+    setAdminCarregando(false);
+  };
+
+  const togglePromo = async (token, statusAtual) => {
+    setAdminCarregando(true);
+    try {
+      await apiPost({
+        action: "toggle_promo",
+        senha: adminSenha,
+        token,
+        status: statusAtual === "ativa" ? "inativa" : "ativa",
+      });
+      await listarPromos();
+    } catch { }
+    setAdminCarregando(false);
+  };
+
+  const copiarLink = (token) => {
+    const url = `${window.location.origin}${window.location.pathname}?t=${token}`;
+    navigator.clipboard.writeText(url);
+    setCopiado(token);
+    setTimeout(() => setCopiado(""), 2000);
+  };
+
+  // ══════ FORM ══════
   const atualizarEntrada = (id, campo, valor) => setEntradas(entradas.map((e) => (e.id === id ? { ...e, [campo]: valor } : e)));
   const adicionarEntrada = () => { const n = criarEntradaVazia(); setEntradas([...entradas, n]); setExpandido((p) => ({ ...p, [n.id]: true })); };
   const removerEntrada = (id) => { if (entradas.length > 1) setEntradas(entradas.filter((e) => e.id !== id)); };
@@ -113,21 +260,14 @@ export default function App() {
   });
 
   const parsearImport = (texto) => {
-    const linhas = texto.trim().split("\n");
-    const rows = []; const erros = []; let buffer = "";
+    const linhas = texto.trim().split("\n"); const rows = []; const erros = []; let buffer = "";
     for (const linha of linhas) {
       const merged = buffer ? buffer + "\t" + linha.trim() : linha;
       const celulas = merged.split("\t");
       if (celulas.length < COLUNAS.length) { buffer = merged; continue; }
       buffer = "";
       const row = {}; const rowErros = {};
-      COLUNAS.forEach((col, i) => {
-        let val = (celulas[i] || "").trim();
-        if (col.tipo === "cpf") val = val.replace(/\D/g, "");
-        row[col.key] = val;
-        const err = validarCelula(val, col.tipo);
-        if (err) rowErros[col.key] = err;
-      });
+      COLUNAS.forEach((col, i) => { let val = (celulas[i] || "").trim(); if (col.tipo === "cpf") val = val.replace(/\D/g, ""); row[col.key] = val; const err = validarCelula(val, col.tipo); if (err) rowErros[col.key] = err; });
       rows.push(row); erros.push(rowErros);
     }
     return { rows, erros };
@@ -136,66 +276,50 @@ export default function App() {
   const handleTextoImport = (texto) => { setTextoImport(texto); setErroMsg(""); const { rows, erros } = parsearImport(texto); setPreviewRows(rows); setPreviewErros(erros); };
   const temErrosImport = () => previewErros.some((e) => Object.keys(e).length > 0);
 
-  const irParaRevisao = (rows) => { setRowsParaEnviar(rows); setQtdEnviada(rows.length); setEtapa("revisao"); };
+  const irParaRevisao = (rows) => { setRowsParaEnviar(rows); setQtdEnviada(rows.length); setTela("revisao"); };
   const handleEnviarManual = () => { const erro = validar(); if (erro) { setErroMsg(erro); return; } setErroMsg(""); irParaRevisao(montarRowsManual()); };
   const handleEnviarImport = () => {
     if (previewRows.length === 0) { setErroMsg("Nenhuma linha válida."); return; }
-    if (temErrosImport()) { setErroMsg("Corrija os erros destacados antes de enviar."); return; }
+    if (temErrosImport()) { setErroMsg("Corrija os erros."); return; }
     setErroMsg(""); irParaRevisao(previewRows);
   };
 
   const confirmarEnvio = async () => {
-    setEtapa("enviando");
-    // Envia como array de arrays (na ordem das colunas) pra garantir a ordem
+    setTela("enviando");
     const payload = {
-      aba: CONFIG.abaPlanilha,
+      action: "submit",
+      aba: promoAtual.nome,
       colunas: COLUNAS.map((col) => col.label),
       linhas: rowsParaEnviar.map(rowParaArray),
     };
-    if (!CONFIG.appsScriptUrl) { console.log("Payload:", JSON.stringify(payload, null, 2)); await new Promise((r) => setTimeout(r, 1500)); setEtapa("sucesso"); return; }
     try {
-      await fetch(CONFIG.appsScriptUrl, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      setEtapa("sucesso");
-    } catch { setEtapa("erro"); }
+      await apiPostNoReply(payload);
+      setTela("sucesso");
+    } catch { setTela("erro"); }
   };
 
-  // ── Consulta por nome ou CPF ──
+  // ── Consulta ──
   const consultarDados = async () => {
     const busca = consultaBusca.trim();
     if (!busca || busca.length < 3) { setConsultaErro("Digite pelo menos 3 caracteres."); return; }
     setConsultaErro(""); setConsultaSucesso(""); setConsultaCarregando(true); setConsultaResultado(null);
     try {
-      const url = `${CONFIG.appsScriptUrl}?action=consultar&busca=${encodeURIComponent(busca)}&aba=${encodeURIComponent(CONFIG.abaPlanilha)}`;
-      const res = await fetch(url);
-      const data = await res.json();
+      const data = await apiGet({ action: "consultar", busca, aba: promoAtual.nome });
       if (data.linhas && data.linhas.length > 0) {
-        // Converte arrays de volta pra objetos usando as colunas
         const rows = data.linhas.map((vals) => {
-          const obj = {};
-          COLUNAS.forEach((col, i) => { obj[col.key] = vals[i] != null ? String(vals[i]) : ""; });
-          obj._rowIndex = vals[vals.length - 1]; // índice da linha na planilha
-          return obj;
+          const obj = {}; COLUNAS.forEach((col, i) => { obj[col.key] = vals[i] != null ? String(vals[i]) : ""; }); obj._rowIndex = vals[vals.length - 1]; return obj;
         });
         setConsultaResultado(rows);
-      } else {
-        setConsultaErro("Nenhum cadastro encontrado.");
-      }
-    } catch { setConsultaErro("Erro ao consultar. Tente novamente."); }
+      } else { setConsultaErro("Nenhum cadastro encontrado."); }
+    } catch { setConsultaErro("Erro ao consultar."); }
     setConsultaCarregando(false);
   };
 
   const reenviarCorrecao = async (rowCorrigido) => {
     setConsultaCarregando(true); setConsultaSucesso("");
-    const payload = {
-      aba: CONFIG.abaPlanilha,
-      action: "atualizar",
-      rowIndex: rowCorrigido._rowIndex,
-      valores: rowParaArray(rowCorrigido),
-    };
     try {
-      await fetch(CONFIG.appsScriptUrl, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      setConsultaSucesso("Dados atualizados com sucesso!");
-      setConsultaResultado(null);
+      await apiPostNoReply({ action: "atualizar", aba: promoAtual.nome, rowIndex: rowCorrigido._rowIndex, valores: rowParaArray(rowCorrigido) });
+      setConsultaSucesso("Dados atualizados!"); setConsultaResultado(null);
     } catch { setConsultaErro("Erro ao atualizar."); }
     setConsultaCarregando(false);
   };
@@ -203,28 +327,139 @@ export default function App() {
   const resetar = () => {
     setContato(""); setResponsavel(""); setEntradas([criarEntradaVazia()]);
     setSenhasVisiveis({}); setExpandido({}); setTextoImport(""); setPreviewRows([]);
-    setPreviewErros([]); setErroMsg(""); setRowsParaEnviar([]); setEtapa("form");
+    setPreviewErros([]); setErroMsg(""); setRowsParaEnviar([]); setTela("form");
   };
 
   const getPreview = (ent) => CONFIG.programas.map((p) => ent[`email_${p.id}`] ? `${p.nome}: ${ent[`email_${p.id}`]}` : "").filter(Boolean).join(" · ");
   const getNomeConta = (ent, idx) => { const t = CONFIG.camposTitular.find((ct) => ct.id === "titularNome"); return (t && ent[t.id]) || `Conta ${idx + 1}`; };
 
+  // ══════════════════
+  // RENDER
+  // ══════════════════
   return (
     <div style={{ ...st.page, background: c.fundo, color: c.texto }}>
       <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
       <div style={{ ...st.topBand, background: `linear-gradient(90deg, ${c.primaria}, ${c.destaque}, ${c.primaria})` }}><div style={st.bandPattern} /></div>
 
-      {(etapa === "form" || etapa === "revisao") && (
+      {/* ══════ LOADING ══════ */}
+      {tela === "loading" && (
+        <div style={st.statusBox}>
+          <div style={{ ...st.spinner, borderTopColor: c.primaria }} />
+          <p style={{ ...st.statusSub, color: c.textoSuave }}>Verificando acesso...</p>
+        </div>
+      )}
+
+      {/* ══════ FECHADO ══════ */}
+      {tela === "fechado" && (
+        <div style={st.statusBox}>
+          <div style={{ ...st.successIcon, background: c.primaria + "15", color: c.primaria }}>🔒</div>
+          <h2 style={{ ...st.statusTitle, color: c.texto }}>Acesso restrito</h2>
+          <p style={{ ...st.statusSub, color: c.textoSuave }}>
+            Este formulário requer um link de acesso válido.<br />
+            Solicite o link atualizado com a equipe {CONFIG.empresa}.
+          </p>
+          <button style={{ ...st.linkBtn, marginTop: 30, fontSize: 11, color: c.textoSuave }}
+            onClick={() => setTela("admin-login")}>Acesso administrativo</button>
+        </div>
+      )}
+
+      {/* ══════ ADMIN LOGIN ══════ */}
+      {tela === "admin-login" && (
+        <div style={st.statusBox}>
+          <h2 style={{ ...st.statusTitle, color: c.texto }}>Painel Administrativo</h2>
+          <p style={{ ...st.statusSub, color: c.textoSuave, marginBottom: 20 }}>Digite a senha de administrador</p>
+          <input style={{ ...st.input, maxWidth: 300, margin: "0 auto", textAlign: "center", background: c.inputFundo, borderColor: c.inputBorda, color: c.texto }}
+            type="password" placeholder="Senha" value={adminSenha}
+            onChange={(e) => setAdminSenha(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && adminLogin()} />
+          {adminErro && <p style={{ color: c.erroCor, fontSize: 13, marginTop: 10 }}>{adminErro}</p>}
+          <button style={{ ...st.submitBtn, maxWidth: 300, margin: "16px auto 0", background: c.primaria, color: c.destaque }}
+            onClick={adminLogin} disabled={adminCarregando}>{adminCarregando ? "..." : "Entrar"}</button>
+          <button style={{ ...st.linkBtn, marginTop: 16 }} onClick={() => setTela("fechado")}>← Voltar</button>
+        </div>
+      )}
+
+      {/* ══════ ADMIN DASHBOARD ══════ */}
+      {tela === "admin" && (
+        <section style={{ ...st.formWrap, paddingTop: 30 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <h2 style={{ ...st.cardTitle, color: c.texto, margin: 0 }}>Painel — {CONFIG.empresa}</h2>
+            <button style={{ ...st.linkBtn, fontSize: 12 }} onClick={() => { setTela("fechado"); setAdminLogado(false); setAdminSenha(""); }}>Sair</button>
+          </div>
+
+          {/* Criar nova promo */}
+          <div style={{ ...st.card, background: c.cardFundo }}>
+            <h3 style={{ ...st.cardTitle2, color: c.texto, marginBottom: 12 }}>Nova promoção</h3>
+            <div className="search-bar" style={{ display: "flex", gap: 10 }}>
+              <input style={{ ...st.input, flex: 1, background: c.inputFundo, borderColor: c.inputBorda, color: c.texto }}
+                placeholder="Nome da promoção (ex: Promo Smiles Mai26)" value={novaPromoNome}
+                onChange={(e) => setNovaPromoNome(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && criarPromo()} />
+              <button style={{ ...st.submitBtn, width: "auto", padding: "11px 20px", background: c.primaria, color: c.destaque, fontSize: 14 }}
+                onClick={criarPromo} disabled={adminCarregando || !novaPromoNome.trim()}>
+                + Criar
+              </button>
+            </div>
+          </div>
+
+          {/* Lista de promos */}
+          <div style={{ ...st.card, background: c.cardFundo }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ ...st.cardTitle2, color: c.texto }}>Promoções</h3>
+              <button style={{ ...st.linkBtn, fontSize: 11 }} onClick={listarPromos}>↻ Atualizar</button>
+            </div>
+
+            {adminCarregando && promos.length === 0 && <p style={{ color: c.textoSuave, fontSize: 13 }}>Carregando...</p>}
+            {!adminCarregando && promos.length === 0 && <p style={{ color: c.textoSuave, fontSize: 13 }}>Nenhuma promoção criada ainda.</p>}
+
+            {promos.map((promo, i) => (
+              <div key={i} style={{ padding: "14px 0", borderTop: i > 0 ? "1px solid #f0ede6" : "none" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div>
+                    <strong style={{ color: c.texto, fontSize: 15 }}>{promo.nome}</strong>
+                    <span style={{
+                      marginLeft: 10, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12,
+                      background: promo.status === "ativa" ? "#f0fdf4" : "#fef2f2",
+                      color: promo.status === "ativa" ? "#16a34a" : "#dc2626",
+                    }}>
+                      {promo.status === "ativa" ? "● Ativa" : "○ Inativa"}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 12, color: c.textoSuave, marginBottom: 8 }}>
+                  Token: <code style={{ background: "#f5f3ee", padding: "2px 6px", borderRadius: 4 }}>{promo.token}</code>
+                  {promo.data && <span style={{ marginLeft: 10 }}>Criada em: {promo.data}</span>}
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button style={{ ...st.miniBtn, background: c.destaque, color: c.primaria }}
+                    onClick={() => copiarLink(promo.token)}>
+                    {copiado === promo.token ? "✓ Copiado!" : "📋 Copiar link"}
+                  </button>
+                  <button style={{ ...st.miniBtn, background: promo.status === "ativa" ? "#fef2f2" : "#f0fdf4", color: promo.status === "ativa" ? "#dc2626" : "#16a34a" }}
+                    onClick={() => togglePromo(promo.token, promo.status)}>
+                    {promo.status === "ativa" ? "⏸ Desativar" : "▶ Ativar"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ══════ HERO (form + revisão) ══════ */}
+      {(tela === "form" || tela === "revisao") && (
         <section style={st.hero}>
-          <div style={{ ...st.promoTag, background: c.primaria, color: c.destaque }}>Promoção Exclusiva</div>
+          <div style={{ ...st.promoTag, background: c.primaria, color: c.destaque }}>{promoAtual?.nome || "Promoção"}</div>
           <h1 style={{ ...st.title, color: c.primaria }}>{CONFIG.titulo}<br /><span style={{ ...st.titleAccent, color: c.destaque }}>{CONFIG.tituloDestaque}</span></h1>
           <p style={{ ...st.subtitle, color: c.textoSuave }}>{CONFIG.subtitulo}</p>
           <div style={st.chips}>{CONFIG.programas.map((p) => (<span key={p.id} style={{ ...st.chip, background: p.cor + "12", color: p.cor, borderColor: p.cor + "30" }}>{p.emoji} {p.nome}</span>))}</div>
         </section>
       )}
 
-      {/* ══════ FORMULÁRIO ══════ */}
-      {etapa === "form" && (
+      {/* ══════ FORM ══════ */}
+      {tela === "form" && (
         <section style={st.formWrap}>
           {CONFIG.permitirImportacao && (
             <div style={st.tabBar}>
@@ -263,76 +498,66 @@ export default function App() {
           {modo === "importar" && (<>
             <div style={{ ...st.card, background: c.cardFundo }}>
               <div style={st.cardIcon}>📋</div><h2 style={{ ...st.cardTitle, color: c.texto }}>Importar da planilha</h2>
-              <p style={{ ...st.importDesc, color: c.textoSuave }}>Copie as linhas da sua planilha e cole abaixo:</p>
+              <p style={{ ...st.importDesc, color: c.textoSuave }}>Copie as linhas e cole abaixo:</p>
               <div style={st.formatBox}><div style={st.formatHeader}>Formato ({COLUNAS.length} colunas):</div><div style={st.formatCols}>{COLUNAS.map((col, i) => (<span key={i} style={{ ...st.formatTag, background: c.primaria + "12", color: c.primaria, borderColor: c.primaria + "25" }}>{i + 1}. {col.label}</span>))}</div></div>
               <textarea style={{ ...st.textarea, background: c.inputFundo, borderColor: c.inputBorda, color: c.texto }} placeholder="Cole aqui as linhas da planilha..." value={textoImport} onChange={(e) => handleTextoImport(e.target.value)} rows={8} />
               {previewRows.length > 0 && (
-                <div style={st.previewBox}>
-                  <div style={{ ...st.previewHeader, color: temErrosImport() ? c.erroCor : c.primaria }}>{temErrosImport() ? `⚠ Corrija os campos em vermelho` : `✓ ${previewRows.length} linha(s) válida(s)`}</div>
+                <div style={st.previewBox}><div style={{ ...st.previewHeader, color: temErrosImport() ? c.erroCor : c.primaria }}>{temErrosImport() ? "⚠ Corrija os campos em vermelho" : `✓ ${previewRows.length} linha(s) válida(s)`}</div>
                   <div style={st.previewScroll}><table style={st.previewTable}><thead><tr>{COLUNAS.map((col, i) => (<th key={i} style={{ ...st.previewTh, background: c.primaria, color: c.destaque }}>{col.label}</th>))}</tr></thead><tbody>
                     {previewRows.slice(0, 10).map((row, ri) => (<tr key={ri}>{COLUNAS.map((col, ci) => { const err = previewErros[ri]?.[col.key]; return (<td key={ci} style={{ ...st.previewTd, ...(err ? { background: "#fef2f2", color: c.erroCor } : {}) }} title={err || ""}>{row[col.key] || "—"}{err && <span style={{ display: "block", fontSize: 9 }}>{err}</span>}</td>); })}</tr>))}
-                  </tbody></table></div>
-                  {previewRows.length > 10 && <p style={{ ...st.previewMore, color: c.textoSuave }}>... e mais {previewRows.length - 10}</p>}
-                </div>
+                  </tbody></table></div></div>
               )}
-              {textoImport && previewRows.length === 0 && <div style={{ ...st.erroBox, color: c.erroCor }}>⚠ Nenhuma linha válida. Verifique se há {COLUNAS.length} colunas separadas por TAB.</div>}
+              {textoImport && previewRows.length === 0 && <div style={{ ...st.erroBox, color: c.erroCor }}>⚠ Nenhuma linha válida.</div>}
             </div>
             {erroMsg && <div style={{ ...st.erroBox, color: c.erroCor }}>⚠ {erroMsg}</div>}
-            <button style={{ ...st.submitBtn, background: c.primaria, color: c.destaque, opacity: previewRows.length === 0 || temErrosImport() ? 0.5 : 1 }} onClick={handleEnviarImport} disabled={previewRows.length === 0 || temErrosImport()}>Revisar e enviar {previewRows.length} linha{previewRows.length !== 1 ? "s" : ""}<span style={st.arrow}>→</span></button>
+            <button style={{ ...st.submitBtn, background: c.primaria, color: c.destaque, opacity: previewRows.length === 0 || temErrosImport() ? 0.5 : 1 }} onClick={handleEnviarImport} disabled={previewRows.length === 0 || temErrosImport()}>Revisar {previewRows.length} linha{previewRows.length !== 1 ? "s" : ""}<span style={st.arrow}>→</span></button>
           </>)}
 
           <p style={st.disclaimer}>🔒 Dados enviados com segurança direto para a equipe {CONFIG.empresa}.</p>
-          {CONFIG.permitirConsulta && <p style={{ ...st.disclaimer, marginTop: 20 }}>Já enviou e precisa corrigir?{" "}<button style={st.linkBtn} onClick={() => { setEtapa("consulta"); setConsultaResultado(null); setConsultaErro(""); setConsultaSucesso(""); }}>Consulte aqui</button></p>}
+          {CONFIG.permitirConsulta && <p style={{ ...st.disclaimer, marginTop: 20 }}>Já enviou e precisa corrigir?{" "}<button style={st.linkBtn} onClick={() => { setTela("consulta"); setConsultaResultado(null); setConsultaErro(""); setConsultaSucesso(""); }}>Consulte aqui</button></p>}
         </section>
       )}
 
       {/* ══════ REVISÃO ══════ */}
-      {etapa === "revisao" && (
+      {tela === "revisao" && (
         <section style={st.formWrap}>
           <div style={{ ...st.card, background: c.cardFundo }}>
             <h2 style={{ ...st.cardTitle, color: c.texto }}>📝 Confira antes de enviar</h2>
-            <p style={{ ...st.importDesc, color: c.textoSuave }}>Revise os dados. Se algo estiver errado, volte e corrija.</p>
             <div style={st.previewScroll}><table style={st.previewTable}><thead><tr>{COLUNAS.map((col, i) => (<th key={i} style={{ ...st.previewTh, background: c.primaria, color: c.destaque }}>{col.label}</th>))}</tr></thead><tbody>
               {rowsParaEnviar.map((row, ri) => (<tr key={ri}>{COLUNAS.map((col, ci) => (<td key={ci} style={st.previewTd}>{row[col.key] || "—"}</td>))}</tr>))}
             </tbody></table></div>
           </div>
           <div className="review-buttons" style={{ display: "flex", gap: 10 }}>
-            <button style={{ ...st.submitBtn, flex: 1, background: "#e8e5dd", color: c.texto, boxShadow: "none" }} onClick={() => setEtapa("form")}>← Voltar</button>
-            <button style={{ ...st.submitBtn, flex: 2, background: c.primaria, color: c.destaque }} onClick={confirmarEnvio}>Confirmar envio ({qtdEnviada})<span style={st.arrow}>→</span></button>
+            <button style={{ ...st.submitBtn, flex: 1, background: "#e8e5dd", color: c.texto, boxShadow: "none" }} onClick={() => setTela("form")}>← Voltar</button>
+            <button style={{ ...st.submitBtn, flex: 2, background: c.primaria, color: c.destaque }} onClick={confirmarEnvio}>Confirmar ({qtdEnviada})<span style={st.arrow}>→</span></button>
           </div>
         </section>
       )}
 
       {/* ══════ CONSULTA ══════ */}
-      {etapa === "consulta" && (
+      {tela === "consulta" && (
         <section style={{ ...st.formWrap, paddingTop: 40 }}>
           <div style={{ ...st.card, background: c.cardFundo }}>
             <h2 style={{ ...st.cardTitle, color: c.texto }}>🔍 Consultar cadastro</h2>
-            <p style={{ ...st.importDesc, color: c.textoSuave }}>Busque por CPF ou nome do responsável para visualizar e corrigir dados.</p>
             <div className="search-bar" style={{ display: "flex", gap: 10, marginBottom: 14 }}>
               <input style={{ ...st.input, flex: 1, background: c.inputFundo, borderColor: c.inputBorda, color: c.texto }}
-                placeholder="CPF ou nome do responsável" value={consultaBusca}
-                onChange={(e) => setConsultaBusca(e.target.value)}
+                placeholder="CPF ou nome do responsável" value={consultaBusca} onChange={(e) => setConsultaBusca(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && consultarDados()} />
               <button style={{ ...st.submitBtn, width: "auto", padding: "11px 24px", background: c.primaria, color: c.destaque, fontSize: 14 }}
                 onClick={consultarDados} disabled={consultaCarregando}>{consultaCarregando ? "..." : "Buscar"}</button>
             </div>
-
             {consultaErro && <div style={{ ...st.erroBox, color: c.erroCor }}>⚠ {consultaErro}</div>}
             {consultaSucesso && <div style={{ ...st.erroBox, background: "#f0fdf4", borderColor: "#bbf7d0", color: "#16a34a" }}>✓ {consultaSucesso}</div>}
-
-            {consultaResultado && consultaResultado.map((row, ri) => (
-              <ConsultaRow key={ri} row={row} colunas={COLUNAS} cores={c} onReenviar={reenviarCorrecao} carregando={consultaCarregando} />
-            ))}
+            {consultaResultado && consultaResultado.map((row, ri) => (<ConsultaRow key={ri} row={row} colunas={COLUNAS} cores={c} onReenviar={reenviarCorrecao} carregando={consultaCarregando} />))}
           </div>
-          <button style={{ ...st.submitBtn, background: "#e8e5dd", color: c.texto, boxShadow: "none" }}
-            onClick={() => { setEtapa("form"); setConsultaResultado(null); setConsultaBusca(""); setConsultaErro(""); setConsultaSucesso(""); }}>← Voltar ao formulário</button>
+          <button style={{ ...st.submitBtn, background: "#e8e5dd", color: c.texto, boxShadow: "none" }} onClick={() => { setTela("form"); setConsultaResultado(null); setConsultaBusca(""); setConsultaErro(""); setConsultaSucesso(""); }}>← Voltar ao formulário</button>
         </section>
       )}
 
-      {etapa === "enviando" && (<div style={st.statusBox}><div style={{ ...st.spinner, borderTopColor: c.primaria }} /><h2 style={{ ...st.statusTitle, color: c.texto }}>Enviando...</h2><p style={{ ...st.statusSub, color: c.textoSuave }}>Aguarde um instante</p></div>)}
-      {etapa === "sucesso" && (<div style={st.statusBox}><div style={{ ...st.successIcon, background: c.destaque + "30", color: c.primaria }}>✓</div><h2 style={{ ...st.statusTitle, color: c.texto }}>Cadastro enviado!</h2><p style={{ ...st.statusSub, color: c.textoSuave }}>{qtdEnviada} conta{qtdEnviada > 1 ? "s" : ""} registrada{qtdEnviada > 1 ? "s" : ""}. {CONFIG.mensagemSucesso}</p><button style={{ ...st.resetBtn, background: c.destaque, color: c.primaria }} onClick={resetar}>Novo cadastro</button></div>)}
-      {etapa === "erro" && (<div style={st.statusBox}><div style={{ ...st.successIcon, background: "#fee", color: "#c00" }}>!</div><h2 style={{ ...st.statusTitle, color: c.texto }}>Erro no envio</h2><p style={{ ...st.statusSub, color: c.textoSuave }}>Tente novamente ou entre em contato.</p><button style={{ ...st.resetBtn, background: c.destaque, color: c.primaria }} onClick={() => setEtapa("form")}>Tentar novamente</button></div>)}
+      {/* ══════ STATUS ══════ */}
+      {tela === "enviando" && (<div style={st.statusBox}><div style={{ ...st.spinner, borderTopColor: c.primaria }} /><h2 style={{ ...st.statusTitle, color: c.texto }}>Enviando...</h2></div>)}
+      {tela === "sucesso" && (<div style={st.statusBox}><div style={{ ...st.successIcon, background: c.destaque + "30", color: c.primaria }}>✓</div><h2 style={{ ...st.statusTitle, color: c.texto }}>Cadastro enviado!</h2><p style={{ ...st.statusSub, color: c.textoSuave }}>{qtdEnviada} conta{qtdEnviada > 1 ? "s" : ""} registrada{qtdEnviada > 1 ? "s" : ""}. {CONFIG.mensagemSucesso}</p><button style={{ ...st.resetBtn, background: c.destaque, color: c.primaria }} onClick={resetar}>Novo cadastro</button></div>)}
+      {tela === "erro" && (<div style={st.statusBox}><div style={{ ...st.successIcon, background: "#fee", color: "#c00" }}>!</div><h2 style={{ ...st.statusTitle, color: c.texto }}>Erro no envio</h2><button style={{ ...st.resetBtn, background: c.destaque, color: c.primaria }} onClick={() => setTela("form")}>Tentar novamente</button></div>)}
 
       <footer style={st.footer}>{CONFIG.rodape}</footer>
       <style>{`
@@ -357,46 +582,24 @@ export default function App() {
   );
 }
 
-// ── Resultado editável da consulta ──
 function ConsultaRow({ row, colunas, cores, onReenviar, carregando }) {
   const [editando, setEditando] = useState(false);
   const [dados, setDados] = useState({ ...row });
   const c = cores;
-
   if (!editando) {
-    return (
-      <div style={{ padding: "14px 0", borderTop: "1px solid #f0ede6", marginTop: 14 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <strong>{dados.responsavel || dados.contato || "—"}</strong>
-          <button style={{ ...st.formatTag, background: c.destaque, color: c.primaria, border: "none", cursor: "pointer", fontWeight: 700 }} onClick={() => setEditando(true)}>Editar</button>
-        </div>
-        {colunas.map((col) => (
-          <div key={col.key} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13, borderBottom: "1px solid #f5f3ee" }}>
-            <span style={{ color: c.textoSuave, fontSize: 11, textTransform: "uppercase" }}>{col.label}</span>
-            <span style={{ color: c.texto, maxWidth: "60%", textAlign: "right", wordBreak: "break-all" }}>{dados[col.key] || "—"}</span>
-          </div>
-        ))}
-      </div>
-    );
+    return (<div style={{ padding: "14px 0", borderTop: "1px solid #f0ede6", marginTop: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}><strong>{dados.responsavel || "—"}</strong><button style={{ ...st.formatTag, background: c.destaque, color: c.primaria, border: "none", cursor: "pointer", fontWeight: 700 }} onClick={() => setEditando(true)}>Editar</button></div>
+      {colunas.map((col) => (<div key={col.key} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13, borderBottom: "1px solid #f5f3ee" }}><span style={{ color: c.textoSuave, fontSize: 11, textTransform: "uppercase" }}>{col.label}</span><span style={{ color: c.texto, maxWidth: "60%", textAlign: "right", wordBreak: "break-all" }}>{dados[col.key] || "—"}</span></div>))}
+    </div>);
   }
-
-  return (
-    <div style={{ padding: "14px 0", borderTop: "1px solid #f0ede6", marginTop: 14 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: c.primaria, marginBottom: 12 }}>Editando cadastro:</div>
-      {colunas.map((col) => (
-        <div key={col.key} style={{ marginBottom: 8 }}>
-          <label style={{ ...st.label, color: c.textoSuave, marginBottom: 4, display: "block" }}>{col.label}</label>
-          <input style={{ ...st.input, background: c.inputFundo, borderColor: c.inputBorda, color: c.texto }}
-            value={dados[col.key] || ""} onChange={(e) => setDados((p) => ({ ...p, [col.key]: e.target.value }))} />
-        </div>
-      ))}
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <button style={{ padding: "8px 16px", background: "#e8e5dd", color: c.texto, border: "none", borderRadius: 8, fontSize: 13 }} onClick={() => { setEditando(false); setDados({ ...row }); }}>Cancelar</button>
-        <button style={{ padding: "8px 16px", background: c.primaria, color: c.destaque, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700 }}
-          onClick={() => onReenviar(dados)} disabled={carregando}>{carregando ? "Salvando..." : "Salvar correção"}</button>
-      </div>
+  return (<div style={{ padding: "14px 0", borderTop: "1px solid #f0ede6", marginTop: 14 }}>
+    <div style={{ fontSize: 13, fontWeight: 700, color: c.primaria, marginBottom: 12 }}>Editando:</div>
+    {colunas.map((col) => (<div key={col.key} style={{ marginBottom: 8 }}><label style={{ ...st.label, color: c.textoSuave, marginBottom: 4, display: "block" }}>{col.label}</label><input style={{ ...st.input, background: c.inputFundo, borderColor: c.inputBorda, color: c.texto }} value={dados[col.key] || ""} onChange={(e) => setDados((p) => ({ ...p, [col.key]: e.target.value }))} /></div>))}
+    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+      <button style={{ padding: "8px 16px", background: "#e8e5dd", color: c.texto, border: "none", borderRadius: 8, fontSize: 13 }} onClick={() => { setEditando(false); setDados({ ...row }); }}>Cancelar</button>
+      <button style={{ padding: "8px 16px", background: c.primaria, color: c.destaque, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700 }} onClick={() => onReenviar(dados)} disabled={carregando}>{carregando ? "Salvando..." : "Salvar"}</button>
     </div>
-  );
+  </div>);
 }
 
 const st = {
@@ -414,7 +617,9 @@ const st = {
   tabBar: { display: "flex", gap: 4, marginBottom: 14, background: "#e8e5dd", borderRadius: 10, padding: 4 },
   tab: { flex: 1, padding: "10px 12px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "all .2s" },
   card: { borderRadius: 14, padding: "22px 22px 18px", marginBottom: 14, border: "1px solid #e8e5dd", boxShadow: "0 1px 3px #0000000a" },
-  cardIcon: { fontSize: 20, marginBottom: 6 }, cardTitle: { fontFamily: "'Sora', sans-serif", fontSize: 16, fontWeight: 700, marginBottom: 16 }, cardTitle2: { fontFamily: "'Sora', sans-serif", fontSize: 15, fontWeight: 700, margin: 0 },
+  cardIcon: { fontSize: 20, marginBottom: 6 },
+  cardTitle: { fontFamily: "'Sora', sans-serif", fontSize: 16, fontWeight: 700, marginBottom: 16 },
+  cardTitle2: { fontFamily: "'Sora', sans-serif", fontSize: 15, fontWeight: 700, margin: 0 },
   contaHeaderRow: { display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" },
   contaHeaderLeft: { display: "flex", alignItems: "center", gap: 12 },
   contaNum: { width: 32, height: 32, borderRadius: 8, fontFamily: "'Sora', sans-serif", fontWeight: 800, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
@@ -438,7 +643,8 @@ const st = {
   submitBtn: { width: "100%", padding: "16px 24px", border: "none", borderRadius: 12, fontSize: 16, fontFamily: "'Sora', sans-serif", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, letterSpacing: "0.01em", boxShadow: "0 4px 16px #1A3C3440" },
   arrow: { fontSize: 20, fontWeight: 400 },
   disclaimer: { textAlign: "center", fontSize: 12, color: "#a0a09a", marginTop: 14, lineHeight: 1.5 },
-  linkBtn: { background: "none", border: "none", color: "#1A3C34", textDecoration: "underline", fontSize: 12, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 600, padding: 0 },
+  linkBtn: { background: "none", border: "none", color: "#1A3C34", textDecoration: "underline", fontSize: 12, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 600, padding: 0, display: "inline" },
+  miniBtn: { padding: "6px 14px", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif" },
   importDesc: { fontSize: 13, lineHeight: 1.6, marginBottom: 14 },
   formatBox: { background: "#f5f3ee", borderRadius: 10, padding: "14px 16px", marginBottom: 14 },
   formatHeader: { fontSize: 12, fontWeight: 700, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.04em" },
