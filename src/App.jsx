@@ -2,40 +2,21 @@ import { useState } from "react";
 import CONFIG from "./config";
 
 // ── Helpers ──
-const formatarTel = (v) => {
-  const n = v.replace(/\D/g, "").slice(0, 11);
-  if (n.length <= 2) return n.length ? `(${n}` : "";
-  if (n.length <= 7) return `(${n.slice(0, 2)}) ${n.slice(2)}`;
-  return `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}`;
-};
-const formatarData = (v) => {
-  const n = v.replace(/\D/g, "").slice(0, 8);
-  if (n.length <= 2) return n;
-  if (n.length <= 4) return `${n.slice(0, 2)}/${n.slice(2)}`;
-  return `${n.slice(0, 2)}/${n.slice(2, 4)}/${n.slice(4)}`;
-};
+const formatarTel = (v) => { const n = v.replace(/\D/g, "").slice(0, 11); if (n.length <= 2) return n.length ? `(${n}` : ""; if (n.length <= 7) return `(${n.slice(0, 2)}) ${n.slice(2)}`; return `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}`; };
+const formatarData = (v) => { const n = v.replace(/\D/g, "").slice(0, 8); if (n.length <= 2) return n; if (n.length <= 4) return `${n.slice(0, 2)}/${n.slice(2)}`; return `${n.slice(0, 2)}/${n.slice(2, 4)}/${n.slice(4)}`; };
 const formatarCPF = (v) => v.replace(/\D/g, "").slice(0, 11);
 const formatadores = { text: (v) => v, cpf: formatarCPF, data: formatarData, email: (v) => v };
 
-// ── Validadores de célula ──
 const validarCelula = (valor, tipo) => {
   if (!valor || !valor.trim()) return "Campo obrigatório";
   const v = valor.trim();
-  if (tipo === "cpf") {
-    const nums = v.replace(/\D/g, "");
-    if (nums.length !== 11) return "CPF deve ter 11 dígitos";
-  }
-  if (tipo === "data") {
-    const nums = v.replace(/\D/g, "");
-    if (nums.length < 8) return "Data incompleta";
-  }
-  if (tipo === "email") {
-    if (!v.includes("@")) return "Email inválido";
-  }
+  if (tipo === "cpf" && v.replace(/\D/g, "").length !== 11) return "CPF deve ter 11 dígitos";
+  if (tipo === "data" && v.replace(/\D/g, "").length < 8) return "Data incompleta";
+  if (tipo === "email" && !v.includes("@")) return "Email inválido";
   return null;
 };
 
-// ── Colunas esperadas na importação ──
+// ── Colunas na ordem correta (usada em import, revisão e envio) ──
 const gerarColunas = () => {
   const cols = [
     { key: "contato", label: "CONTATO", tipo: "text" },
@@ -48,10 +29,8 @@ const gerarColunas = () => {
   });
   return cols;
 };
-
 const COLUNAS = gerarColunas();
 
-// ── Entrada vazia ──
 const criarEntradaVazia = () => {
   const e = { id: Date.now() + Math.random() };
   CONFIG.camposTitular.forEach((c) => { e[c.id] = ""; });
@@ -59,7 +38,9 @@ const criarEntradaVazia = () => {
   return e;
 };
 
-// ── Input (fora do componente pra evitar bug de foco) ──
+// ── Converte row object pra array na ordem das COLUNAS ──
+const rowParaArray = (row) => COLUNAS.map((col) => row[col.key] || "");
+
 function Input({ label, value, onChange, placeholder, type = "text", senhaKey, senhasVisiveis, toggleSenha, cores, erro }) {
   const temErro = !!erro;
   return (
@@ -67,10 +48,8 @@ function Input({ label, value, onChange, placeholder, type = "text", senhaKey, s
       <label style={{ ...st.label, color: temErro ? cores.erroCor : cores.textoSuave }}>{label}</label>
       {senhaKey ? (
         <div style={st.senhaWrap}>
-          <input
-            style={{ ...st.input, paddingRight: 42, background: cores.inputFundo, borderColor: temErro ? cores.erroCor : cores.inputBorda, color: cores.texto }}
-            type={senhasVisiveis[senhaKey] ? "text" : "password"} value={value} onChange={onChange} placeholder={placeholder}
-          />
+          <input style={{ ...st.input, paddingRight: 42, background: cores.inputFundo, borderColor: temErro ? cores.erroCor : cores.inputBorda, color: cores.texto }}
+            type={senhasVisiveis[senhaKey] ? "text" : "password"} value={value} onChange={onChange} placeholder={placeholder} />
           <button style={st.eyeBtn} onClick={() => toggleSenha(senhaKey)} type="button">{senhasVisiveis[senhaKey] ? "🙈" : "👁"}</button>
         </div>
       ) : (
@@ -81,11 +60,8 @@ function Input({ label, value, onChange, placeholder, type = "text", senhaKey, s
   );
 }
 
-// ══════════════════════════════════════════════
-// COMPONENTE PRINCIPAL
-// ══════════════════════════════════════════════
 export default function App() {
-  const [etapa, setEtapa] = useState("form"); // form | revisao | enviando | sucesso | erro | consulta
+  const [etapa, setEtapa] = useState("form");
   const [modo, setModo] = useState("manual");
   const [contato, setContato] = useState("");
   const [responsavel, setResponsavel] = useState("");
@@ -98,23 +74,20 @@ export default function App() {
   const [previewErros, setPreviewErros] = useState([]);
   const [qtdEnviada, setQtdEnviada] = useState(0);
   const [rowsParaEnviar, setRowsParaEnviar] = useState([]);
-
-  // Consulta
-  const [consultaCpf, setConsultaCpf] = useState("");
+  const [consultaBusca, setConsultaBusca] = useState("");
   const [consultaResultado, setConsultaResultado] = useState(null);
   const [consultaCarregando, setConsultaCarregando] = useState(false);
   const [consultaErro, setConsultaErro] = useState("");
+  const [consultaSucesso, setConsultaSucesso] = useState("");
 
   const c = CONFIG.cores;
 
-  // ── Funções do formulário manual ──
   const atualizarEntrada = (id, campo, valor) => setEntradas(entradas.map((e) => (e.id === id ? { ...e, [campo]: valor } : e)));
   const adicionarEntrada = () => { const n = criarEntradaVazia(); setEntradas([...entradas, n]); setExpandido((p) => ({ ...p, [n.id]: true })); };
   const removerEntrada = (id) => { if (entradas.length > 1) setEntradas(entradas.filter((e) => e.id !== id)); };
   const toggleSenha = (key) => setSenhasVisiveis((p) => ({ ...p, [key]: !p[key] }));
   const toggleExpand = (id) => setExpandido((p) => ({ ...p, [id]: !p[id] }));
 
-  // ── Validação manual ──
   const validar = () => {
     if (!contato.trim() || contato.replace(/\D/g, "").length < 10) return "Preencha um contato válido.";
     if (!responsavel.trim()) return "Preencha o nome do responsável.";
@@ -125,16 +98,13 @@ export default function App() {
         if (err) return `Conta ${i + 1}: ${campo.label} — ${err.toLowerCase()}.`;
       }
       for (const prog of CONFIG.programas) {
-        const errE = validarCelula(e[`email_${prog.id}`], "email");
-        if (errE) return `Conta ${i + 1}: Email ${prog.nome} — ${errE.toLowerCase()}.`;
-        const errS = validarCelula(e[`senha_${prog.id}`], "text");
-        if (errS) return `Conta ${i + 1}: Senha ${prog.nome} — ${errS.toLowerCase()}.`;
+        if (validarCelula(e[`email_${prog.id}`], "email")) return `Conta ${i + 1}: Email ${prog.nome} inválido.`;
+        if (validarCelula(e[`senha_${prog.id}`], "text")) return `Conta ${i + 1}: Senha ${prog.nome} obrigatória.`;
       }
     }
     return null;
   };
 
-  // ── Montar rows do manual ──
   const montarRowsManual = () => entradas.map((e) => {
     const row = { contato, responsavel: responsavel.trim() };
     CONFIG.camposTitular.forEach((campo) => { row[campo.id] = campo.tipo === "cpf" ? e[campo.id].replace(/\D/g, "") : e[campo.id]; });
@@ -142,25 +112,15 @@ export default function App() {
     return row;
   });
 
-  // ── Parser de importação com validação ──
   const parsearImport = (texto) => {
     const linhas = texto.trim().split("\n");
-    const rows = [];
-    const erros = [];
-    let buffer = "";
-
+    const rows = []; const erros = []; let buffer = "";
     for (const linha of linhas) {
       const merged = buffer ? buffer + "\t" + linha.trim() : linha;
       const celulas = merged.split("\t");
-
-      if (celulas.length < COLUNAS.length) {
-        buffer = merged;
-        continue;
-      }
-
+      if (celulas.length < COLUNAS.length) { buffer = merged; continue; }
       buffer = "";
-      const row = {};
-      const rowErros = {};
+      const row = {}; const rowErros = {};
       COLUNAS.forEach((col, i) => {
         let val = (celulas[i] || "").trim();
         if (col.tipo === "cpf") val = val.replace(/\D/g, "");
@@ -168,94 +128,75 @@ export default function App() {
         const err = validarCelula(val, col.tipo);
         if (err) rowErros[col.key] = err;
       });
-      rows.push(row);
-      erros.push(rowErros);
+      rows.push(row); erros.push(rowErros);
     }
     return { rows, erros };
   };
 
-  const handleTextoImport = (texto) => {
-    setTextoImport(texto);
-    setErroMsg("");
-    const { rows, erros } = parsearImport(texto);
-    setPreviewRows(rows);
-    setPreviewErros(erros);
-  };
-
+  const handleTextoImport = (texto) => { setTextoImport(texto); setErroMsg(""); const { rows, erros } = parsearImport(texto); setPreviewRows(rows); setPreviewErros(erros); };
   const temErrosImport = () => previewErros.some((e) => Object.keys(e).length > 0);
 
-  // ── Ir pra revisão ──
-  const irParaRevisao = (rows) => {
-    setRowsParaEnviar(rows);
-    setQtdEnviada(rows.length);
-    setEtapa("revisao");
-  };
-
-  const handleEnviarManual = () => {
-    const erro = validar();
-    if (erro) { setErroMsg(erro); return; }
-    setErroMsg("");
-    irParaRevisao(montarRowsManual());
-  };
-
+  const irParaRevisao = (rows) => { setRowsParaEnviar(rows); setQtdEnviada(rows.length); setEtapa("revisao"); };
+  const handleEnviarManual = () => { const erro = validar(); if (erro) { setErroMsg(erro); return; } setErroMsg(""); irParaRevisao(montarRowsManual()); };
   const handleEnviarImport = () => {
     if (previewRows.length === 0) { setErroMsg("Nenhuma linha válida."); return; }
     if (temErrosImport()) { setErroMsg("Corrija os erros destacados antes de enviar."); return; }
-    setErroMsg("");
-    irParaRevisao(previewRows);
+    setErroMsg(""); irParaRevisao(previewRows);
   };
 
-  // ── Envio final ──
   const confirmarEnvio = async () => {
     setEtapa("enviando");
-    const payload = { aba: CONFIG.abaPlanilha, rows: rowsParaEnviar };
-
-    if (!CONFIG.appsScriptUrl) {
-      console.log("Payload (demo):", JSON.stringify(payload, null, 2));
-      await new Promise((r) => setTimeout(r, 1500));
-      setEtapa("sucesso");
-      return;
-    }
+    // Envia como array de arrays (na ordem das colunas) pra garantir a ordem
+    const payload = {
+      aba: CONFIG.abaPlanilha,
+      colunas: COLUNAS.map((col) => col.label),
+      linhas: rowsParaEnviar.map(rowParaArray),
+    };
+    if (!CONFIG.appsScriptUrl) { console.log("Payload:", JSON.stringify(payload, null, 2)); await new Promise((r) => setTimeout(r, 1500)); setEtapa("sucesso"); return; }
     try {
       await fetch(CONFIG.appsScriptUrl, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       setEtapa("sucesso");
     } catch { setEtapa("erro"); }
   };
 
-  // ── Consulta por CPF ──
-  const consultarCpf = async () => {
-    const cpf = consultaCpf.replace(/\D/g, "");
-    if (cpf.length !== 11) { setConsultaErro("Digite um CPF válido com 11 dígitos."); return; }
-    setConsultaErro("");
-    setConsultaCarregando(true);
-    setConsultaResultado(null);
+  // ── Consulta por nome ou CPF ──
+  const consultarDados = async () => {
+    const busca = consultaBusca.trim();
+    if (!busca || busca.length < 3) { setConsultaErro("Digite pelo menos 3 caracteres."); return; }
+    setConsultaErro(""); setConsultaSucesso(""); setConsultaCarregando(true); setConsultaResultado(null);
     try {
-      const url = `${CONFIG.appsScriptUrl}?action=consultar&cpf=${cpf}&aba=${encodeURIComponent(CONFIG.abaPlanilha)}`;
+      const url = `${CONFIG.appsScriptUrl}?action=consultar&busca=${encodeURIComponent(busca)}&aba=${encodeURIComponent(CONFIG.abaPlanilha)}`;
       const res = await fetch(url);
       const data = await res.json();
-      if (data.rows && data.rows.length > 0) {
-        setConsultaResultado(data.rows);
+      if (data.linhas && data.linhas.length > 0) {
+        // Converte arrays de volta pra objetos usando as colunas
+        const rows = data.linhas.map((vals) => {
+          const obj = {};
+          COLUNAS.forEach((col, i) => { obj[col.key] = vals[i] != null ? String(vals[i]) : ""; });
+          obj._rowIndex = vals[vals.length - 1]; // índice da linha na planilha
+          return obj;
+        });
+        setConsultaResultado(rows);
       } else {
-        setConsultaErro("Nenhum cadastro encontrado com esse CPF nesta promoção.");
+        setConsultaErro("Nenhum cadastro encontrado.");
       }
-    } catch {
-      setConsultaErro("Erro ao consultar. Tente novamente.");
-    }
+    } catch { setConsultaErro("Erro ao consultar. Tente novamente."); }
     setConsultaCarregando(false);
   };
 
   const reenviarCorrecao = async (rowCorrigido) => {
-    setConsultaCarregando(true);
-    const payload = { aba: CONFIG.abaPlanilha, rows: [rowCorrigido], action: "atualizar" };
+    setConsultaCarregando(true); setConsultaSucesso("");
+    const payload = {
+      aba: CONFIG.abaPlanilha,
+      action: "atualizar",
+      rowIndex: rowCorrigido._rowIndex,
+      valores: rowParaArray(rowCorrigido),
+    };
     try {
       await fetch(CONFIG.appsScriptUrl, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      setConsultaErro("");
+      setConsultaSucesso("Dados atualizados com sucesso!");
       setConsultaResultado(null);
-      setConsultaCpf("");
-      alert("Dados atualizados com sucesso!");
-    } catch {
-      setConsultaErro("Erro ao atualizar.");
-    }
+    } catch { setConsultaErro("Erro ao atualizar."); }
     setConsultaCarregando(false);
   };
 
@@ -268,43 +209,33 @@ export default function App() {
   const getPreview = (ent) => CONFIG.programas.map((p) => ent[`email_${p.id}`] ? `${p.nome}: ${ent[`email_${p.id}`]}` : "").filter(Boolean).join(" · ");
   const getNomeConta = (ent, idx) => { const t = CONFIG.camposTitular.find((ct) => ct.id === "titularNome"); return (t && ent[t.id]) || `Conta ${idx + 1}`; };
 
-  const mostrarAbas = CONFIG.permitirImportacao;
-
-  // ══════════════════════════════════
-  // RENDER
-  // ══════════════════════════════════
   return (
     <div style={{ ...st.page, background: c.fundo, color: c.texto }}>
       <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
       <div style={{ ...st.topBand, background: `linear-gradient(90deg, ${c.primaria}, ${c.destaque}, ${c.primaria})` }}><div style={st.bandPattern} /></div>
 
-      {/* ── HERO ── */}
       {(etapa === "form" || etapa === "revisao") && (
         <section style={st.hero}>
           <div style={{ ...st.promoTag, background: c.primaria, color: c.destaque }}>Promoção Exclusiva</div>
           <h1 style={{ ...st.title, color: c.primaria }}>{CONFIG.titulo}<br /><span style={{ ...st.titleAccent, color: c.destaque }}>{CONFIG.tituloDestaque}</span></h1>
           <p style={{ ...st.subtitle, color: c.textoSuave }}>{CONFIG.subtitulo}</p>
-          <div style={st.chips}>
-            {CONFIG.programas.map((p) => (<span key={p.id} style={{ ...st.chip, background: p.cor + "12", color: p.cor, borderColor: p.cor + "30" }}>{p.emoji} {p.nome}</span>))}
-          </div>
+          <div style={st.chips}>{CONFIG.programas.map((p) => (<span key={p.id} style={{ ...st.chip, background: p.cor + "12", color: p.cor, borderColor: p.cor + "30" }}>{p.emoji} {p.nome}</span>))}</div>
         </section>
       )}
 
       {/* ══════ FORMULÁRIO ══════ */}
       {etapa === "form" && (
         <section style={st.formWrap}>
-          {mostrarAbas && (
+          {CONFIG.permitirImportacao && (
             <div style={st.tabBar}>
-              <button style={{ ...st.tab, ...(modo === "manual" ? { background: c.primaria, color: c.destaque } : { background: "transparent", color: c.textoSuave }) }} onClick={() => { setModo("manual"); setErroMsg(""); }}>✍️ Preencher manual</button>
-              <button style={{ ...st.tab, ...(modo === "importar" ? { background: c.primaria, color: c.destaque } : { background: "transparent", color: c.textoSuave }) }} onClick={() => { setModo("importar"); setErroMsg(""); }}>📋 Importar planilha</button>
+              <button style={{ ...st.tab, ...(modo === "manual" ? { background: c.primaria, color: c.destaque } : { background: "transparent", color: c.textoSuave }) }} onClick={() => { setModo("manual"); setErroMsg(""); }}>✍️ Manual</button>
+              <button style={{ ...st.tab, ...(modo === "importar" ? { background: c.primaria, color: c.destaque } : { background: "transparent", color: c.textoSuave }) }} onClick={() => { setModo("importar"); setErroMsg(""); }}>📋 Importar</button>
             </div>
           )}
 
-          {/* MANUAL */}
           {modo === "manual" && (<>
             <div style={{ ...st.card, background: c.cardFundo }}>
-              <div style={st.cardIcon}>👤</div>
-              <h2 style={{ ...st.cardTitle, color: c.texto }}>Responsável</h2>
+              <div style={st.cardIcon}>👤</div><h2 style={{ ...st.cardTitle, color: c.texto }}>Responsável</h2>
               <div style={st.cardGrid2}>
                 <Input label="Nome do responsável" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Seu nome" cores={c} />
                 <Input label="Contato (WhatsApp)" value={contato} onChange={(e) => setContato(formatarTel(e.target.value))} placeholder="(21) 99999-9999" cores={c} />
@@ -312,236 +243,120 @@ export default function App() {
             </div>
             {entradas.map((ent, idx) => {
               const isOpen = expandido[ent.id] !== false;
-              return (
-                <div key={ent.id} style={{ ...st.card, background: c.cardFundo }}>
-                  <div style={st.contaHeaderRow} onClick={() => toggleExpand(ent.id)}>
-                    <div style={st.contaHeaderLeft}>
-                      <div style={{ ...st.contaNum, background: c.destaque, color: c.primaria }}>{idx + 1}</div>
-                      <div>
-                        <h2 style={{ ...st.cardTitle2, color: c.texto }}>{getNomeConta(ent, idx)}</h2>
-                        {!isOpen && <span style={st.contaPreview}>{getPreview(ent)}</span>}
-                      </div>
-                    </div>
-                    <div style={st.contaActions}>
-                      {entradas.length > 1 && <button style={st.removeBtn} onClick={(ev) => { ev.stopPropagation(); removerEntrada(ent.id); }}>✕</button>}
-                      <span style={{ ...st.chevron, transform: isOpen ? "rotate(180deg)" : "rotate(0)" }}>▾</span>
-                    </div>
-                  </div>
-                  {isOpen && (
-                    <div style={st.contaBody}>
-                      <div style={st.sectionLabel}><span style={{ ...st.sectionDot, background: c.primaria }} />Dados do titular</div>
-                      <div style={st.cardGrid3}>
-                        {CONFIG.camposTitular.map((campo) => (
-                          <Input key={campo.id} label={campo.label} value={ent[campo.id]}
-                            onChange={(e) => atualizarEntrada(ent.id, campo.id, (formatadores[campo.tipo] || formatadores.text)(e.target.value))}
-                            placeholder={campo.placeholder} cores={c} />
-                        ))}
-                      </div>
-                      {CONFIG.programas.map((prog) => (
-                        <div key={prog.id}>
-                          <div style={st.sectionLabel}><span style={{ ...st.sectionDot, background: prog.cor }} />{prog.nome}</div>
-                          <div style={st.cardGrid2}>
-                            <Input label="Email da conta" value={ent[`email_${prog.id}`]} onChange={(e) => atualizarEntrada(ent.id, `email_${prog.id}`, e.target.value)} placeholder={`email@${prog.id}.com`} cores={c} />
-                            <Input label="Senha" value={ent[`senha_${prog.id}`]} onChange={(e) => atualizarEntrada(ent.id, `senha_${prog.id}`, e.target.value)} placeholder="••••••••" senhaKey={`${prog.id}-${ent.id}`} senhasVisiveis={senhasVisiveis} toggleSenha={toggleSenha} cores={c} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              return (<div key={ent.id} style={{ ...st.card, background: c.cardFundo }}>
+                <div style={st.contaHeaderRow} onClick={() => toggleExpand(ent.id)}>
+                  <div style={st.contaHeaderLeft}><div style={{ ...st.contaNum, background: c.destaque, color: c.primaria }}>{idx + 1}</div><div><h2 style={{ ...st.cardTitle2, color: c.texto }}>{getNomeConta(ent, idx)}</h2>{!isOpen && <span style={st.contaPreview}>{getPreview(ent)}</span>}</div></div>
+                  <div style={st.contaActions}>{entradas.length > 1 && <button style={st.removeBtn} onClick={(ev) => { ev.stopPropagation(); removerEntrada(ent.id); }}>✕</button>}<span style={{ ...st.chevron, transform: isOpen ? "rotate(180deg)" : "rotate(0)" }}>▾</span></div>
                 </div>
-              );
+                {isOpen && (<div style={st.contaBody}>
+                  <div style={st.sectionLabel}><span style={{ ...st.sectionDot, background: c.primaria }} />Dados do titular</div>
+                  <div style={st.cardGrid3}>{CONFIG.camposTitular.map((campo) => (<Input key={campo.id} label={campo.label} value={ent[campo.id]} onChange={(e) => atualizarEntrada(ent.id, campo.id, (formatadores[campo.tipo] || formatadores.text)(e.target.value))} placeholder={campo.placeholder} cores={c} />))}</div>
+                  {CONFIG.programas.map((prog) => (<div key={prog.id}><div style={st.sectionLabel}><span style={{ ...st.sectionDot, background: prog.cor }} />{prog.nome}</div><div style={st.cardGrid2}><Input label="Email da conta" value={ent[`email_${prog.id}`]} onChange={(e) => atualizarEntrada(ent.id, `email_${prog.id}`, e.target.value)} placeholder={`email@${prog.id}.com`} cores={c} /><Input label="Senha" value={ent[`senha_${prog.id}`]} onChange={(e) => atualizarEntrada(ent.id, `senha_${prog.id}`, e.target.value)} placeholder="••••••••" senhaKey={`${prog.id}-${ent.id}`} senhasVisiveis={senhasVisiveis} toggleSenha={toggleSenha} cores={c} /></div></div>))}
+                </div>)}
+              </div>);
             })}
             <button style={{ ...st.addBtn, background: c.cardFundo }} onClick={adicionarEntrada}><span style={{ ...st.addPlus, background: c.destaque, color: c.primaria }}>+</span>Adicionar outra conta</button>
             {erroMsg && <div style={{ ...st.erroBox, color: c.erroCor }}>⚠ {erroMsg}</div>}
             <button style={{ ...st.submitBtn, background: c.primaria, color: c.destaque }} onClick={handleEnviarManual}>Revisar e enviar<span style={st.arrow}>→</span></button>
           </>)}
 
-          {/* IMPORTAR */}
           {modo === "importar" && (<>
             <div style={{ ...st.card, background: c.cardFundo }}>
-              <div style={st.cardIcon}>📋</div>
-              <h2 style={{ ...st.cardTitle, color: c.texto }}>Importar da planilha</h2>
-              <p style={{ ...st.importDesc, color: c.textoSuave }}>Copie as linhas da sua planilha e cole no campo abaixo. As colunas devem estar nesta ordem:</p>
-              <div style={st.formatBox}>
-                <div style={st.formatHeader}>Formato esperado ({COLUNAS.length} colunas):</div>
-                <div style={st.formatCols}>
-                  {COLUNAS.map((col, i) => (<span key={i} style={{ ...st.formatTag, background: c.primaria + "12", color: c.primaria, borderColor: c.primaria + "25" }}>{i + 1}. {col.label}</span>))}
-                </div>
-              </div>
-              <textarea style={{ ...st.textarea, background: c.inputFundo, borderColor: c.inputBorda, color: c.texto }}
-                placeholder="Cole aqui as linhas copiadas da planilha...\nCada linha = uma conta\nAs colunas são separadas por TAB (copiar do Excel/Sheets faz isso automaticamente)"
-                value={textoImport} onChange={(e) => handleTextoImport(e.target.value)} rows={8} />
-
-              {/* Preview com validação */}
+              <div style={st.cardIcon}>📋</div><h2 style={{ ...st.cardTitle, color: c.texto }}>Importar da planilha</h2>
+              <p style={{ ...st.importDesc, color: c.textoSuave }}>Copie as linhas da sua planilha e cole abaixo:</p>
+              <div style={st.formatBox}><div style={st.formatHeader}>Formato ({COLUNAS.length} colunas):</div><div style={st.formatCols}>{COLUNAS.map((col, i) => (<span key={i} style={{ ...st.formatTag, background: c.primaria + "12", color: c.primaria, borderColor: c.primaria + "25" }}>{i + 1}. {col.label}</span>))}</div></div>
+              <textarea style={{ ...st.textarea, background: c.inputFundo, borderColor: c.inputBorda, color: c.texto }} placeholder="Cole aqui as linhas da planilha..." value={textoImport} onChange={(e) => handleTextoImport(e.target.value)} rows={8} />
               {previewRows.length > 0 && (
                 <div style={st.previewBox}>
-                  <div style={{ ...st.previewHeader, color: c.primaria }}>
-                    {temErrosImport()
-                      ? `⚠ ${previewRows.length} linha(s) — corrija os campos em vermelho`
-                      : `✓ ${previewRows.length} linha(s) válida(s)`}
-                  </div>
-                  <div style={st.previewScroll}>
-                    <table style={st.previewTable}>
-                      <thead><tr>{COLUNAS.map((col, i) => (<th key={i} style={{ ...st.previewTh, background: c.primaria, color: c.destaque }}>{col.label}</th>))}</tr></thead>
-                      <tbody>
-                        {previewRows.slice(0, 10).map((row, ri) => (
-                          <tr key={ri}>
-                            {COLUNAS.map((col, ci) => {
-                              const err = previewErros[ri]?.[col.key];
-                              return (
-                                <td key={ci} style={{ ...st.previewTd, ...(err ? { background: "#fef2f2", color: c.erroCor } : {}) }} title={err || ""}>
-                                  {row[col.key] || "—"}
-                                  {err && <span style={{ display: "block", fontSize: 9, opacity: 0.8 }}>{err}</span>}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <div style={{ ...st.previewHeader, color: temErrosImport() ? c.erroCor : c.primaria }}>{temErrosImport() ? `⚠ Corrija os campos em vermelho` : `✓ ${previewRows.length} linha(s) válida(s)`}</div>
+                  <div style={st.previewScroll}><table style={st.previewTable}><thead><tr>{COLUNAS.map((col, i) => (<th key={i} style={{ ...st.previewTh, background: c.primaria, color: c.destaque }}>{col.label}</th>))}</tr></thead><tbody>
+                    {previewRows.slice(0, 10).map((row, ri) => (<tr key={ri}>{COLUNAS.map((col, ci) => { const err = previewErros[ri]?.[col.key]; return (<td key={ci} style={{ ...st.previewTd, ...(err ? { background: "#fef2f2", color: c.erroCor } : {}) }} title={err || ""}>{row[col.key] || "—"}{err && <span style={{ display: "block", fontSize: 9 }}>{err}</span>}</td>); })}</tr>))}
+                  </tbody></table></div>
                   {previewRows.length > 10 && <p style={{ ...st.previewMore, color: c.textoSuave }}>... e mais {previewRows.length - 10}</p>}
                 </div>
               )}
-              {textoImport && previewRows.length === 0 && (
-                <div style={{ ...st.erroBox, color: c.erroCor }}>⚠ Nenhuma linha válida. Verifique se há {COLUNAS.length} colunas separadas por TAB.</div>
-              )}
+              {textoImport && previewRows.length === 0 && <div style={{ ...st.erroBox, color: c.erroCor }}>⚠ Nenhuma linha válida. Verifique se há {COLUNAS.length} colunas separadas por TAB.</div>}
             </div>
             {erroMsg && <div style={{ ...st.erroBox, color: c.erroCor }}>⚠ {erroMsg}</div>}
-            <button style={{ ...st.submitBtn, background: c.primaria, color: c.destaque, opacity: previewRows.length === 0 || temErrosImport() ? 0.5 : 1 }}
-              onClick={handleEnviarImport} disabled={previewRows.length === 0 || temErrosImport()}>
-              Revisar e enviar {previewRows.length} linha{previewRows.length !== 1 ? "s" : ""}<span style={st.arrow}>→</span>
-            </button>
+            <button style={{ ...st.submitBtn, background: c.primaria, color: c.destaque, opacity: previewRows.length === 0 || temErrosImport() ? 0.5 : 1 }} onClick={handleEnviarImport} disabled={previewRows.length === 0 || temErrosImport()}>Revisar e enviar {previewRows.length} linha{previewRows.length !== 1 ? "s" : ""}<span style={st.arrow}>→</span></button>
           </>)}
 
           <p style={st.disclaimer}>🔒 Dados enviados com segurança direto para a equipe {CONFIG.empresa}.</p>
-
-          {/* Link pra consulta */}
-          {CONFIG.permitirConsulta && (
-            <p style={{ ...st.disclaimer, marginTop: 20 }}>
-              Já enviou e precisa corrigir?{" "}
-              <button style={st.linkBtn} onClick={() => setEtapa("consulta")}>Consulte aqui pelo CPF</button>
-            </p>
-          )}
+          {CONFIG.permitirConsulta && <p style={{ ...st.disclaimer, marginTop: 20 }}>Já enviou e precisa corrigir?{" "}<button style={st.linkBtn} onClick={() => { setEtapa("consulta"); setConsultaResultado(null); setConsultaErro(""); setConsultaSucesso(""); }}>Consulte aqui</button></p>}
         </section>
       )}
 
-      {/* ══════ TELA DE REVISÃO ══════ */}
+      {/* ══════ REVISÃO ══════ */}
       {etapa === "revisao" && (
         <section style={st.formWrap}>
           <div style={{ ...st.card, background: c.cardFundo }}>
-            <h2 style={{ ...st.cardTitle, color: c.texto }}>📝 Confira seus dados antes de enviar</h2>
-            <p style={{ ...st.importDesc, color: c.textoSuave }}>Revise as informações abaixo. Se algo estiver errado, volte e corrija.</p>
-            <div style={st.previewScroll}>
-              <table style={st.previewTable}>
-                <thead><tr>{COLUNAS.map((col, i) => (<th key={i} style={{ ...st.previewTh, background: c.primaria, color: c.destaque }}>{col.label}</th>))}</tr></thead>
-                <tbody>
-                  {rowsParaEnviar.map((row, ri) => (
-                    <tr key={ri}>
-                      {COLUNAS.map((col, ci) => (<td key={ci} style={st.previewTd}>{row[col.key] || "—"}</td>))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <h2 style={{ ...st.cardTitle, color: c.texto }}>📝 Confira antes de enviar</h2>
+            <p style={{ ...st.importDesc, color: c.textoSuave }}>Revise os dados. Se algo estiver errado, volte e corrija.</p>
+            <div style={st.previewScroll}><table style={st.previewTable}><thead><tr>{COLUNAS.map((col, i) => (<th key={i} style={{ ...st.previewTh, background: c.primaria, color: c.destaque }}>{col.label}</th>))}</tr></thead><tbody>
+              {rowsParaEnviar.map((row, ri) => (<tr key={ri}>{COLUNAS.map((col, ci) => (<td key={ci} style={st.previewTd}>{row[col.key] || "—"}</td>))}</tr>))}
+            </tbody></table></div>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <button style={{ ...st.submitBtn, flex: 1, background: "#e8e5dd", color: c.texto, boxShadow: "none" }} onClick={() => setEtapa("form")}>← Voltar e editar</button>
+            <button style={{ ...st.submitBtn, flex: 1, background: "#e8e5dd", color: c.texto, boxShadow: "none" }} onClick={() => setEtapa("form")}>← Voltar</button>
             <button style={{ ...st.submitBtn, flex: 2, background: c.primaria, color: c.destaque }} onClick={confirmarEnvio}>Confirmar envio ({qtdEnviada})<span style={st.arrow}>→</span></button>
           </div>
         </section>
       )}
 
-      {/* ══════ CONSULTA POR CPF ══════ */}
+      {/* ══════ CONSULTA ══════ */}
       {etapa === "consulta" && (
-        <section style={st.formWrap}>
+        <section style={{ ...st.formWrap, paddingTop: 40 }}>
           <div style={{ ...st.card, background: c.cardFundo }}>
             <h2 style={{ ...st.cardTitle, color: c.texto }}>🔍 Consultar cadastro</h2>
-            <p style={{ ...st.importDesc, color: c.textoSuave }}>Digite o CPF para buscar e corrigir dados enviados nesta promoção.</p>
+            <p style={{ ...st.importDesc, color: c.textoSuave }}>Busque por CPF ou nome do responsável para visualizar e corrigir dados.</p>
             <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
               <input style={{ ...st.input, flex: 1, background: c.inputFundo, borderColor: c.inputBorda, color: c.texto }}
-                placeholder="Digite o CPF (só números)" value={consultaCpf}
-                onChange={(e) => setConsultaCpf(formatarCPF(e.target.value))}
-                onKeyDown={(e) => e.key === "Enter" && consultarCpf()} />
-              <button style={{ ...st.submitBtn, width: "auto", padding: "11px 24px", background: c.primaria, color: c.destaque }}
-                onClick={consultarCpf} disabled={consultaCarregando}>
-                {consultaCarregando ? "..." : "Buscar"}
-              </button>
+                placeholder="CPF ou nome do responsável" value={consultaBusca}
+                onChange={(e) => setConsultaBusca(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && consultarDados()} />
+              <button style={{ ...st.submitBtn, width: "auto", padding: "11px 24px", background: c.primaria, color: c.destaque, fontSize: 14 }}
+                onClick={consultarDados} disabled={consultaCarregando}>{consultaCarregando ? "..." : "Buscar"}</button>
             </div>
 
             {consultaErro && <div style={{ ...st.erroBox, color: c.erroCor }}>⚠ {consultaErro}</div>}
+            {consultaSucesso && <div style={{ ...st.erroBox, background: "#f0fdf4", borderColor: "#bbf7d0", color: "#16a34a" }}>✓ {consultaSucesso}</div>}
 
-            {/* Resultado da consulta */}
             {consultaResultado && consultaResultado.map((row, ri) => (
-              <ConsultaRow key={ri} row={row} cores={c} onReenviar={reenviarCorrecao} carregando={consultaCarregando} />
+              <ConsultaRow key={ri} row={row} colunas={COLUNAS} cores={c} onReenviar={reenviarCorrecao} carregando={consultaCarregando} />
             ))}
           </div>
-
-          <button style={{ ...st.submitBtn, background: "#e8e5dd", color: c.texto, boxShadow: "none" }} onClick={() => { setEtapa("form"); setConsultaResultado(null); setConsultaCpf(""); setConsultaErro(""); }}>
-            ← Voltar ao formulário
-          </button>
+          <button style={{ ...st.submitBtn, background: "#e8e5dd", color: c.texto, boxShadow: "none" }}
+            onClick={() => { setEtapa("form"); setConsultaResultado(null); setConsultaBusca(""); setConsultaErro(""); setConsultaSucesso(""); }}>← Voltar ao formulário</button>
         </section>
       )}
 
-      {/* ══════ STATUS ══════ */}
-      {etapa === "enviando" && (
-        <div style={st.statusBox}>
-          <div style={{ ...st.spinner, borderTopColor: c.primaria }} />
-          <h2 style={{ ...st.statusTitle, color: c.texto }}>Enviando...</h2>
-          <p style={{ ...st.statusSub, color: c.textoSuave }}>Aguarde um instante</p>
-        </div>
-      )}
-      {etapa === "sucesso" && (
-        <div style={st.statusBox}>
-          <div style={{ ...st.successIcon, background: c.destaque + "30", color: c.primaria }}>✓</div>
-          <h2 style={{ ...st.statusTitle, color: c.texto }}>Cadastro enviado!</h2>
-          <p style={{ ...st.statusSub, color: c.textoSuave }}>{qtdEnviada} conta{qtdEnviada > 1 ? "s" : ""} registrada{qtdEnviada > 1 ? "s" : ""}. {CONFIG.mensagemSucesso}</p>
-          <button style={{ ...st.resetBtn, background: c.destaque, color: c.primaria }} onClick={resetar}>Novo cadastro</button>
-        </div>
-      )}
-      {etapa === "erro" && (
-        <div style={st.statusBox}>
-          <div style={{ ...st.successIcon, background: "#fee", color: "#c00" }}>!</div>
-          <h2 style={{ ...st.statusTitle, color: c.texto }}>Erro no envio</h2>
-          <p style={{ ...st.statusSub, color: c.textoSuave }}>Tente novamente ou entre em contato.</p>
-          <button style={{ ...st.resetBtn, background: c.destaque, color: c.primaria }} onClick={() => setEtapa("form")}>Tentar novamente</button>
-        </div>
-      )}
+      {etapa === "enviando" && (<div style={st.statusBox}><div style={{ ...st.spinner, borderTopColor: c.primaria }} /><h2 style={{ ...st.statusTitle, color: c.texto }}>Enviando...</h2><p style={{ ...st.statusSub, color: c.textoSuave }}>Aguarde um instante</p></div>)}
+      {etapa === "sucesso" && (<div style={st.statusBox}><div style={{ ...st.successIcon, background: c.destaque + "30", color: c.primaria }}>✓</div><h2 style={{ ...st.statusTitle, color: c.texto }}>Cadastro enviado!</h2><p style={{ ...st.statusSub, color: c.textoSuave }}>{qtdEnviada} conta{qtdEnviada > 1 ? "s" : ""} registrada{qtdEnviada > 1 ? "s" : ""}. {CONFIG.mensagemSucesso}</p><button style={{ ...st.resetBtn, background: c.destaque, color: c.primaria }} onClick={resetar}>Novo cadastro</button></div>)}
+      {etapa === "erro" && (<div style={st.statusBox}><div style={{ ...st.successIcon, background: "#fee", color: "#c00" }}>!</div><h2 style={{ ...st.statusTitle, color: c.texto }}>Erro no envio</h2><p style={{ ...st.statusSub, color: c.textoSuave }}>Tente novamente ou entre em contato.</p><button style={{ ...st.resetBtn, background: c.destaque, color: c.primaria }} onClick={() => setEtapa("form")}>Tentar novamente</button></div>)}
 
       <footer style={st.footer}>{CONFIG.rodape}</footer>
-      <style>{`
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-        input::placeholder, textarea::placeholder { color: #a0a0a0; }
-        input:focus, textarea:focus { outline: none; border-color: ${c.primaria} !important; box-shadow: 0 0 0 3px ${c.primaria}12; }
-        button { cursor: pointer; transition: all .15s; }
-        button:active { transform: scale(0.97); }
-        button:disabled { cursor: not-allowed; }
-      `}</style>
+      <style>{`* { box-sizing: border-box; margin: 0; padding: 0; } @keyframes spin { to { transform: rotate(360deg); } } @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } } input::placeholder, textarea::placeholder { color: #a0a0a0; } input:focus, textarea:focus { outline: none; border-color: ${c.primaria} !important; box-shadow: 0 0 0 3px ${c.primaria}12; } button { cursor: pointer; transition: all .15s; } button:active { transform: scale(0.97); } button:disabled { cursor: not-allowed; }`}</style>
     </div>
   );
 }
 
-// ── Componente de resultado da consulta (editável) ──
-function ConsultaRow({ row, cores, onReenviar, carregando }) {
+// ── Resultado editável da consulta ──
+function ConsultaRow({ row, colunas, cores, onReenviar, carregando }) {
   const [editando, setEditando] = useState(false);
   const [dados, setDados] = useState({ ...row });
   const c = cores;
 
-  const update = (key, val) => setDados((p) => ({ ...p, [key]: val }));
-
   if (!editando) {
     return (
-      <div style={{ ...st.contaBody, marginTop: 0, paddingTop: 14, borderTop: "1px solid #f0ede6", marginBottom: 14 }}>
+      <div style={{ padding: "14px 0", borderTop: "1px solid #f0ede6", marginTop: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <strong style={{ color: c.texto }}>{dados.responsavel || "—"}</strong>
+          <strong>{dados.responsavel || dados.contato || "—"}</strong>
           <button style={{ ...st.formatTag, background: c.destaque, color: c.primaria, border: "none", cursor: "pointer", fontWeight: 700 }} onClick={() => setEditando(true)}>Editar</button>
         </div>
-        {COLUNAS.map((col) => (
+        {colunas.map((col) => (
           <div key={col.key} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13, borderBottom: "1px solid #f5f3ee" }}>
             <span style={{ color: c.textoSuave, fontSize: 11, textTransform: "uppercase" }}>{col.label}</span>
-            <span style={{ color: c.texto }}>{dados[col.key] || "—"}</span>
+            <span style={{ color: c.texto, maxWidth: "60%", textAlign: "right", wordBreak: "break-all" }}>{dados[col.key] || "—"}</span>
           </div>
         ))}
       </div>
@@ -549,25 +364,24 @@ function ConsultaRow({ row, cores, onReenviar, carregando }) {
   }
 
   return (
-    <div style={{ ...st.contaBody, marginTop: 0, paddingTop: 14, borderTop: "1px solid #f0ede6", marginBottom: 14 }}>
+    <div style={{ padding: "14px 0", borderTop: "1px solid #f0ede6", marginTop: 14 }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: c.primaria, marginBottom: 12 }}>Editando cadastro:</div>
-      {COLUNAS.map((col) => (
+      {colunas.map((col) => (
         <div key={col.key} style={{ marginBottom: 8 }}>
           <label style={{ ...st.label, color: c.textoSuave, marginBottom: 4, display: "block" }}>{col.label}</label>
           <input style={{ ...st.input, background: c.inputFundo, borderColor: c.inputBorda, color: c.texto }}
-            value={dados[col.key] || ""} onChange={(e) => update(col.key, e.target.value)} />
+            value={dados[col.key] || ""} onChange={(e) => setDados((p) => ({ ...p, [col.key]: e.target.value }))} />
         </div>
       ))}
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <button style={{ ...st.formatTag, background: "#e8e5dd", color: c.texto, border: "none", cursor: "pointer", padding: "8px 16px" }} onClick={() => setEditando(false)}>Cancelar</button>
-        <button style={{ ...st.formatTag, background: c.primaria, color: c.destaque, border: "none", cursor: "pointer", padding: "8px 16px", fontWeight: 700 }}
+        <button style={{ padding: "8px 16px", background: "#e8e5dd", color: c.texto, border: "none", borderRadius: 8, fontSize: 13 }} onClick={() => { setEditando(false); setDados({ ...row }); }}>Cancelar</button>
+        <button style={{ padding: "8px 16px", background: c.primaria, color: c.destaque, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700 }}
           onClick={() => onReenviar(dados)} disabled={carregando}>{carregando ? "Salvando..." : "Salvar correção"}</button>
       </div>
     </div>
   );
 }
 
-// ── Estilos ──
 const st = {
   page: { minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", position: "relative" },
   topBand: { height: 6, position: "relative", overflow: "hidden" },
@@ -583,9 +397,7 @@ const st = {
   tabBar: { display: "flex", gap: 4, marginBottom: 14, background: "#e8e5dd", borderRadius: 10, padding: 4 },
   tab: { flex: 1, padding: "10px 12px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "all .2s" },
   card: { borderRadius: 14, padding: "22px 22px 18px", marginBottom: 14, border: "1px solid #e8e5dd", boxShadow: "0 1px 3px #0000000a" },
-  cardIcon: { fontSize: 20, marginBottom: 6 },
-  cardTitle: { fontFamily: "'Sora', sans-serif", fontSize: 16, fontWeight: 700, marginBottom: 16 },
-  cardTitle2: { fontFamily: "'Sora', sans-serif", fontSize: 15, fontWeight: 700, margin: 0 },
+  cardIcon: { fontSize: 20, marginBottom: 6 }, cardTitle: { fontFamily: "'Sora', sans-serif", fontSize: 16, fontWeight: 700, marginBottom: 16 }, cardTitle2: { fontFamily: "'Sora', sans-serif", fontSize: 15, fontWeight: 700, margin: 0 },
   contaHeaderRow: { display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", userSelect: "none" },
   contaHeaderLeft: { display: "flex", alignItems: "center", gap: 12 },
   contaNum: { width: 32, height: 32, borderRadius: 8, fontFamily: "'Sora', sans-serif", fontWeight: 800, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
