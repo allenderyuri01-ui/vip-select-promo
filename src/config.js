@@ -1,56 +1,39 @@
-// ╔══════════════════════════════════════════════════════════════╗
-// ║  CONFIG — Formulário Smiles · Milhas Plus                   ║
-// ╚══════════════════════════════════════════════════════════════╝
-
 const CONFIG = {
-
   empresa: "Milhas Plus",
   titulo: "Cadastre suas",
   tituloDestaque: "contas",
-  subtitulo: "Preencha os dados das contas Smiles e Livelo de forma rápida e segura.",
+  subtitulo: "Preencha os dados das contas Smiles e Livelo.",
   rodape: "Milhas Plus © 2026",
   mensagemSucesso: "Contas registradas com sucesso!",
-
-  // ── APPS SCRIPT ──
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbyIR0MgKn6V67xI1GLN1oklSIRrwIyC4uokz_06CEVwPatP2eYrVymtyH7D7QH-G_sDHw/exec",
-
-  // ── PLANILHA ──
-  // O script usa openById, então o ID fica no script, não aqui.
-  // A aba fixa é "base fixa" — configurada no script.
-
-  // ── ACESSO ──
+  appsScriptUrl: "COLE_A_URL_DO_SCRIPT_AQUI",
   permitirImportacao: true,
   permitirConsulta: true,
-
-  // ══════════════════════════════════════════
-  // COLUNAS DA PLANILHA (A-P) — na ordem exata
-  // A coluna A (DATA) é preenchida automaticamente.
-  // ══════════════════════════════════════════
-
-  // Campos do PARCEIRO RESPONSÁVEL (preenchidos 1x, repetidos em cada linha)
   camposResponsavel: [
-    { id: "parceiroResp",   coluna: "B", label: "Parceiro responsável",           placeholder: "Seu nome",                    tipo: "text" },
-    { id: "telResp",        coluna: "C", label: "Telefone (parceiro responsável)", placeholder: "(21) 99999-9999",             tipo: "tel" },
-    { id: "pixResp",        coluna: "P", label: "Pix parceiro responsável",        placeholder: "CPF, email ou telefone",      tipo: "text" },
+    { id: "parceiroResp", coluna: "B", label: "Parceiro responsável",      placeholder: "Seu nome completo",      tipo: "text" },
+    { id: "telResp",      coluna: "C", label: "Telefone (parceiro resp.)", placeholder: "(21) 99999-9999",        tipo: "tel" },
+    { id: "pixResp",      coluna: "Q", label: "Pix parceiro responsável",  placeholder: "CPF, email ou telefone", tipo: "text" },
   ],
-
-  // Campos de cada CONTA (repetidos por conta adicionada)
   camposConta: [
-    { id: "nomeTitular",    coluna: "D", label: "Nome titular da conta",                placeholder: "Nome completo",          tipo: "text" },
-    { id: "dataNasc",       coluna: "E", label: "Data de nascimento (titular)",         placeholder: "DD/MM/AAAA",             tipo: "data" },
-    { id: "telTitular",     coluna: "F", label: "Telefone (titular da conta)",          placeholder: "(21) 99999-9999",        tipo: "tel" },
-    { id: "emailConta",     coluna: "G", label: "E-mail (registrado na conta)",         placeholder: "email@exemplo.com",      tipo: "email" },
-    { id: "loginSmiles",    coluna: "H", label: "Login Smiles",                         placeholder: "email ou CPF",           tipo: "text" },
-    { id: "senhaSmiles",    coluna: "I", label: "Senha Smiles",                         placeholder: "••••••••",               tipo: "senha" },
-    { id: "loginLivelo",    coluna: "J", label: "Login Livelo",                         placeholder: "email ou CPF",           tipo: "text" },
-    { id: "senhaLivelo",    coluna: "K", label: "Senha Livelo",                         placeholder: "••••••••",               tipo: "senha" },
-    { id: "prazo",          coluna: "L", label: "Prazo de pagamento",                   placeholder: "Ex: 30 dias",            tipo: "text" },
-    { id: "contaCheia",     coluna: "M", label: "Conta cheia?",                         placeholder: "",                       tipo: "select", opcoes: ["Sim", "Não"] },
-    { id: "cartaoClube",    coluna: "N", label: "Cartão próprio usado no clube?",       placeholder: "",                       tipo: "select", opcoes: ["Sim", "Não"] },
-    { id: "dataClube",      coluna: "O", label: "Data da assinatura do clube",          placeholder: "DD/MM/AAAA",             tipo: "data" },
+    { id: "nomeTitular",   coluna: "D", label: "Nome titular da conta",                   placeholder: "Nome completo",     tipo: "text" },
+    { id: "dataNasc",      coluna: "E", label: "Data de nascimento (titular)",             placeholder: "DD/MM/AAAA",        tipo: "data" },
+    { id: "telTitular",    coluna: "F", label: "Telefone (titular da conta)",              placeholder: "(21) 99999-9999",   tipo: "tel" },
+    { id: "emailConta",    coluna: "G", label: "E-mail (registrado na conta)",             placeholder: "email@exemplo.com", tipo: "email" },
+    { id: "loginSmiles",   coluna: "H", label: "Login Smiles",                             placeholder: "email ou CPF",      tipo: "text" },
+    { id: "senhaSmiles",   coluna: "I", label: "Senha Smiles",                             placeholder: "••••••••",          tipo: "senha" },
+    { id: "loginLivelo",   coluna: "J", label: "Login Livelo",                             placeholder: "email ou CPF",      tipo: "text" },
+    { id: "senhaLivelo",   coluna: "K", label: "Senha Livelo",                             placeholder: "••••••••",          tipo: "senha" },
+    { id: "prazo",         coluna: "L", label: "Prazo de pagamento (conta cheia)",         placeholder: "Ex: 30 dias",       tipo: "text" },
+    { id: "contaCheia",    coluna: "M", label: "Conta cheia?",                             placeholder: "",                  tipo: "select", opcoes: ["Sim", "Não"] },
+    { id: "cartaoProprio", coluna: "N", label: "Cartão próprio usado no clube?",           placeholder: "",                  tipo: "select", opcoes: ["Sim", "Não"] },
+    { id: "cartaoMP",      coluna: "O", label: "Cartão MP utilizado (últimos dígitos)",    placeholder: "Ex: 1234",          tipo: "text", condicional: { campo: "cartaoProprio", valor: "Não" } },
+    { id: "dataClube",     coluna: "P", label: "Data da assinatura do clube",              placeholder: "DD/MM/AAAA",        tipo: "data" },
   ],
-
-  // ── CORES ──
+  exemploImport: [
+    "Leo Silva", "(21) 98765-4321", "Maria Santos", "15/06/1990",
+    "(21) 91234-5678", "maria@gmail.com", "maria@gmail.com", "Senha123!",
+    "maria@gmail.com", "Livelo456@", "30 dias", "Sim", "Não", "5678",
+    "01/01/2025", "(21) 98765-4321"
+  ],
   cores: {
     primaria:   "#1A3C34",
     destaque:   "#F2D645",
@@ -63,5 +46,4 @@ const CONFIG = {
     erroCor:    "#dc2626",
   },
 };
-
 export default CONFIG;
