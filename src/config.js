@@ -31,7 +31,7 @@ const CONFIG = {
   camposResponsavel: [
     { id: "parceiroResp",   coluna: "B", label: "Parceiro responsável",           placeholder: "Seu nome",                    tipo: "text" },
     { id: "telResp",        coluna: "C", label: "Telefone (parceiro responsável)", placeholder: "(21) 99999-9999",             tipo: "tel" },
-    { id: "pixResp",        coluna: "P", label: "Pix parceiro responsável",        placeholder: "CPF, email ou telefone",      tipo: "text" },
+    { id: "pixResp",        coluna: "Q", label: "Pix parceiro responsável",        placeholder: "CPF, email ou telefone",      tipo: "text" },
   ],
 
   // Campos de cada CONTA (repetidos por conta adicionada)
@@ -46,8 +46,9 @@ const CONFIG = {
     { id: "senhaLivelo",    coluna: "K", label: "Senha Livelo",                         placeholder: "••••••••",               tipo: "senha" },
     { id: "prazo",          coluna: "L", label: "Prazo de pagamento",                   placeholder: "Ex: 30 dias",            tipo: "text" },
     { id: "contaCheia",     coluna: "M", label: "Conta cheia?",                         placeholder: "",                       tipo: "select", opcoes: ["Sim", "Não"] },
-    { id: "cartaoClube",    coluna: "N", label: "Cartão próprio usado no clube?",       placeholder: "",                       tipo: "select", opcoes: ["Sim", "Não"] },
-    { id: "dataClube",      coluna: "O", label: "Data da assinatura do clube",          placeholder: "DD/MM/AAAA",             tipo: "data" },
+    { id: "cartaoClube",    coluna: "N", label: "Usou cartão próprio no clube?",         placeholder: "",                       tipo: "select", opcoes: ["Sim", "Não"] },
+    { id: "cartaoMP",       coluna: "O", label: "Cartão MP utilizado (últimos 4 dígitos)", placeholder: "Ex: 1234",             tipo: "text", condicional: { campo: "cartaoClube", valor: "Não" } },
+    { id: "dataClube",      coluna: "P", label: "Data da assinatura do clube",          placeholder: "DD/MM/AAAA",             tipo: "data" },
   ],
 
   // ── CORES ──
