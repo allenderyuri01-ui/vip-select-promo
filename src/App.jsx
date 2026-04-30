@@ -11,6 +11,23 @@ const formatador = (tipo, v) => {
   return v;
 };
 
+const normalizarBool = (v) => {
+  const u = v.toString().trim().toUpperCase();
+  if (["TRUE","VERDADEIRO","SIM","S","1","YES"].includes(u)) return "Sim";
+  if (["FALSE","FALSO","NÃO","NAO","N","0","NO"].includes(u)) return "Não";
+  return v;
+};
+
+const EXEMPLO = {
+  parceiroResp: "Maria Silva", telResp: "(21) 98765-4321",
+  nomeTitular: "João da Silva", dataNasc: "15/06/1990",
+  telTitular: "(21) 91234-5678", emailConta: "joao@gmail.com",
+  loginSmiles: "joao@gmail.com", senhaSmiles: "Senha@123",
+  loginLivelo: "joao@gmail.com", senhaLivelo: "Livelo@456",
+  prazo: "30 dias", contaCheia: "Sim", cartaoClube: "Não",
+  cartaoMP: "1234", dataClube: "01/03/2025", pixResp: "maria@email.com",
+};
+
 const validarCelula = (valor, tipo) => {
   if (!valor || !valor.trim()) return "Obrigatório";
   const v = valor.trim();
@@ -204,6 +221,11 @@ export default function App() {
   const toggleExpand = (id) => setExpandido((p) => ({ ...p, [id]: !p[id] }));
 
   // ── Validação manual ──
+  const campoVisivel = (campo, contaDados) => {
+    if (!campo.condicional) return true;
+    return contaDados[campo.condicional.campo] === campo.condicional.valor;
+  };
+
   const validar = () => {
     for (const campo of CONFIG.camposResponsavel) {
       const err = validarCelula(resp[campo.id], campo.tipo);
@@ -211,6 +233,7 @@ export default function App() {
     }
     for (let i = 0; i < contas.length; i++) {
       for (const campo of CONFIG.camposConta) {
+        if (!campoVisivel(campo, contas[i])) continue;
         const err = validarCelula(contas[i][campo.id], campo.tipo);
         if (err) return `Conta ${i + 1} — ${campo.label}: ${err}`;
       }
@@ -218,29 +241,36 @@ export default function App() {
     return null;
   };
 
-  // ── Montar rows manuais ──
   const montarRows = () => contas.map((ct) => {
-    const row = [agora(), ...rowParaArray(resp, ct)];
-    return row;
+    const ctFinal = { ...ct };
+    if (ctFinal.cartaoClube === "Sim") ctFinal.cartaoMP = "";
+    return [agora(), ...rowParaArray(resp, ctFinal)];
   });
 
-  // ── Import ──
   const parsearImport = (texto) => {
     const linhas = texto.trim().split("\n");
     const rows = []; const erros = []; let buffer = "";
     for (const linha of linhas) {
+      const lower = linha.toLowerCase();
+      if (lower.includes("parceiro responsavel") || lower.includes("preenchido pelo") || lower.includes("parceiro responsável")) continue;
       const merged = buffer ? buffer + "\t" + linha.trim() : linha;
       const celulas = merged.split("\t");
       if (celulas.length < COLUNAS.length) { buffer = merged; continue; }
       buffer = "";
-      const vals = celulas.slice(0, COLUNAS.length).map((v) => v.trim());
+      const vals = celulas.slice(0, COLUNAS.length).map((v) => normalizarBool(v.trim()));
+      const idxCartaoClube = COLUNAS.findIndex((c) => c.id === "cartaoClube");
+      const idxCartaoMP = COLUNAS.findIndex((c) => c.id === "cartaoMP");
+      if (idxCartaoClube >= 0 && idxCartaoMP >= 0 && vals[idxCartaoClube] === "Sim") vals[idxCartaoMP] = "";
       const rowErros = {};
       COLUNAS.forEach((col, i) => {
+        if (col.condicional) {
+          const idxDep = COLUNAS.findIndex((c) => c.id === col.condicional.campo);
+          if (idxDep >= 0 && vals[idxDep] !== col.condicional.valor) return;
+        }
         const err = validarCelula(vals[i], col.tipo);
         if (err) rowErros[i] = err;
       });
-      rows.push(vals);
-      erros.push(rowErros);
+      rows.push(vals); erros.push(rowErros);
     }
     return { rows, erros };
   };
@@ -400,15 +430,9 @@ export default function App() {
       {/* ══════ FORM ══════ */}
       {tela === "form" && (
         <section style={st.formWrap}>
-          {CONFIG.permitirImportacao && (
-            <div style={st.tabBar}>
-              <button style={{ ...st.tab, ...(modo === "manual" ? { background: c.primaria, color: c.destaque } : { background: "transparent", color: c.textoSuave }) }} onClick={() => { setModo("manual"); setErroMsg(""); }}>✍️ Manual</button>
-              <button style={{ ...st.tab, ...(modo === "importar" ? { background: c.primaria, color: c.destaque } : { background: "transparent", color: c.textoSuave }) }} onClick={() => { setModo("importar"); setErroMsg(""); }}>📋 Importar</button>
-            </div>
-          )}
 
-          {/* Banner — aparece só no modo manual pra chamar atenção pro import */}
-          {modo === "manual" && (
+          {/* Banner — sempre visível, leva pro import */}
+          {CONFIG.permitirImportacao && (
             <div style={{ background: "linear-gradient(135deg, #1A3C34, #2d5c4a)", borderRadius: 14, padding: "14px 20px", marginBottom: 14, display: "flex", alignItems: "center", gap: 16, cursor: "pointer" }}
               onClick={() => { setModo("importar"); setErroMsg(""); }}>
               <span style={{ fontSize: 28, flexShrink: 0 }}>⚡</span>
@@ -417,6 +441,13 @@ export default function App() {
                 <div style={{ fontSize: 12, color: "#a8c8be", lineHeight: 1.4 }}>Cole as linhas aqui e envie tudo de uma vez — sem digitar campo por campo.</div>
               </div>
               <span style={{ color: "#F2D645", fontSize: 18, flexShrink: 0 }}>→</span>
+            </div>
+          )}
+
+          {CONFIG.permitirImportacao && (
+            <div style={st.tabBar}>
+              <button style={{ ...st.tab, ...(modo === "manual" ? { background: c.primaria, color: c.destaque } : { background: "transparent", color: c.textoSuave }) }} onClick={() => { setModo("manual"); setErroMsg(""); }}>✍️ Manual</button>
+              <button style={{ ...st.tab, ...(modo === "importar" ? { background: c.primaria, color: c.destaque } : { background: "transparent", color: c.textoSuave }) }} onClick={() => { setModo("importar"); setErroMsg(""); }}>📋 Importar</button>
             </div>
           )}
 
@@ -450,13 +481,16 @@ export default function App() {
                 {isOpen && (
                   <div style={st.contaBody}>
                     <div className="grid2" style={st.cardGrid2}>
-                      {CONFIG.camposConta.map((campo) => (
-                        <Input key={campo.id} label={campo.label} value={ct[campo.id] || ""} placeholder={campo.placeholder}
-                          tipo={campo.tipo} opcoes={campo.opcoes} cores={c}
-                          senhaKey={campo.tipo === "senha" ? `${campo.id}-${ct.id}` : undefined}
-                          senhasVisiveis={senhasVisiveis} toggleSenha={toggleSenha}
-                          onChange={(e) => updateConta(ct.id, campo.id, formatador(campo.tipo, e.target.value))} />
-                      ))}
+                      {CONFIG.camposConta.map((campo) => {
+                        if (!campoVisivel(campo, ct)) return null;
+                        return (
+                          <Input key={campo.id} label={campo.label} value={ct[campo.id] || ""} placeholder={campo.placeholder}
+                            tipo={campo.tipo} opcoes={campo.opcoes} cores={c}
+                            senhaKey={campo.tipo === "senha" ? `${campo.id}-${ct.id}` : undefined}
+                            senhasVisiveis={senhasVisiveis} toggleSenha={toggleSenha}
+                            onChange={(e) => updateConta(ct.id, campo.id, formatador(campo.tipo, e.target.value))} />
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -506,7 +540,7 @@ export default function App() {
                     <tbody><tr style={{ background: "#f0fdf4" }}>{COLUNAS.map((col, i) => (<td key={i} style={{ ...st.previewTd, color: "#16a34a", fontWeight: 500 }}>{EXEMPLO[col.id] || "—"}</td>))}</tr></tbody>
                   </table>
                 </div>
-                <p style={{ fontSize: 11, color: c.textoSuave, marginTop: 6 }}>💡 Coluna N: se <strong>Não</strong> usou cartão próprio, preencha a coluna O com os últimos 4 dígitos do cartão MP.</p>
+                <p style={{ fontSize: 11, color: c.textoSuave, marginTop: 6 }}>💡 Se <strong>não</strong> usou cartão próprio, preencha a coluna O com os últimos 4 dígitos do cartão MP.</p>
               </div>
 
               {/* Textarea */}
