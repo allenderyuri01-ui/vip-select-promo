@@ -11,25 +11,6 @@ const formatador = (tipo, v) => {
   return v;
 };
 
-// Normaliza TRUE/FALSE do Excel → Sim/Não
-const normalizarBool = (v) => {
-  const u = v.toString().trim().toUpperCase();
-  if (["TRUE","VERDADEIRO","SIM","S","1","YES"].includes(u)) return "Sim";
-  if (["FALSE","FALSO","NÃO","NAO","N","0","NO"].includes(u)) return "Não";
-  return v;
-};
-
-// Dados fictícios pra tabela de exemplo
-const EXEMPLO = {
-  parceiroResp: "Maria Silva", telResp: "(21) 98765-4321",
-  nomeTitular: "João da Silva", dataNasc: "15/06/1990",
-  telTitular: "(21) 91234-5678", emailConta: "joao@gmail.com",
-  loginSmiles: "joao@gmail.com", senhaSmiles: "Senha@123",
-  loginLivelo: "joao@gmail.com", senhaLivelo: "Livelo@456",
-  prazo: "30 dias", contaCheia: "Sim", cartaoClube: "Não",
-  cartaoMP: "1234", dataClube: "01/03/2025", pixResp: "maria@email.com",
-};
-
 const validarCelula = (valor, tipo) => {
   if (!valor || !valor.trim()) return "Obrigatório";
   const v = valor.trim();
@@ -223,12 +204,6 @@ export default function App() {
   const toggleExpand = (id) => setExpandido((p) => ({ ...p, [id]: !p[id] }));
 
   // ── Validação manual ──
-  // Verifica se campo condicional deve aparecer
-  const campoVisivel = (campo, contaDados) => {
-    if (!campo.condicional) return true;
-    return contaDados[campo.condicional.campo] === campo.condicional.valor;
-  };
-
   const validar = () => {
     for (const campo of CONFIG.camposResponsavel) {
       const err = validarCelula(resp[campo.id], campo.tipo);
@@ -236,7 +211,6 @@ export default function App() {
     }
     for (let i = 0; i < contas.length; i++) {
       for (const campo of CONFIG.camposConta) {
-        if (!campoVisivel(campo, contas[i])) continue;
         const err = validarCelula(contas[i][campo.id], campo.tipo);
         if (err) return `Conta ${i + 1} — ${campo.label}: ${err}`;
       }
@@ -246,9 +220,8 @@ export default function App() {
 
   // ── Montar rows manuais ──
   const montarRows = () => contas.map((ct) => {
-    const ctFinal = { ...ct };
-    if (ctFinal.cartaoClube === "Sim") ctFinal.cartaoMP = "";
-    return [agora(), ...rowParaArray(resp, ctFinal)];
+    const row = [agora(), ...rowParaArray(resp, ct)];
+    return row;
   });
 
   // ── Import ──
@@ -256,24 +229,13 @@ export default function App() {
     const linhas = texto.trim().split("\n");
     const rows = []; const erros = []; let buffer = "";
     for (const linha of linhas) {
-      // Ignora linhas de cabeçalho
-      const lower = linha.toLowerCase();
-      if (lower.includes("parceiro responsavel") || lower.includes("preenchido pelo") || lower.includes("parceiro responsável")) continue;
       const merged = buffer ? buffer + "\t" + linha.trim() : linha;
       const celulas = merged.split("\t");
       if (celulas.length < COLUNAS.length) { buffer = merged; continue; }
       buffer = "";
-      const vals = celulas.slice(0, COLUNAS.length).map((v) => normalizarBool(v.trim()));
-      // Se cartão próprio = Sim, zera cartaoMP
-      const idxCartaoClube = COLUNAS.findIndex((c) => c.id === "cartaoClube");
-      const idxCartaoMP = COLUNAS.findIndex((c) => c.id === "cartaoMP");
-      if (idxCartaoClube >= 0 && idxCartaoMP >= 0 && vals[idxCartaoClube] === "Sim") vals[idxCartaoMP] = "";
+      const vals = celulas.slice(0, COLUNAS.length).map((v) => v.trim());
       const rowErros = {};
       COLUNAS.forEach((col, i) => {
-        if (col.condicional) {
-          const idxDep = COLUNAS.findIndex((c) => c.id === col.condicional.campo);
-          if (idxDep >= 0 && vals[idxDep] !== col.condicional.valor) return;
-        }
         const err = validarCelula(vals[i], col.tipo);
         if (err) rowErros[i] = err;
       });
@@ -445,6 +407,19 @@ export default function App() {
             </div>
           )}
 
+          {/* Banner — aparece só no modo manual pra chamar atenção pro import */}
+          {modo === "manual" && (
+            <div style={{ background: "linear-gradient(135deg, #1A3C34, #2d5c4a)", borderRadius: 14, padding: "14px 20px", marginBottom: 14, display: "flex", alignItems: "center", gap: 16, cursor: "pointer" }}
+              onClick={() => { setModo("importar"); setErroMsg(""); }}>
+              <span style={{ fontSize: 28, flexShrink: 0 }}>⚡</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: "'Sora', sans-serif", fontSize: 15, fontWeight: 700, color: "#F2D645", marginBottom: 2 }}>Tem planilha? Importe direto!</div>
+                <div style={{ fontSize: 12, color: "#a8c8be", lineHeight: 1.4 }}>Cole as linhas aqui e envie tudo de uma vez — sem digitar campo por campo.</div>
+              </div>
+              <span style={{ color: "#F2D645", fontSize: 18, flexShrink: 0 }}>→</span>
+            </div>
+          )}
+
           {/* ── MANUAL ── */}
           {modo === "manual" && (<>
             {/* Responsável */}
@@ -475,16 +450,13 @@ export default function App() {
                 {isOpen && (
                   <div style={st.contaBody}>
                     <div className="grid2" style={st.cardGrid2}>
-                      {CONFIG.camposConta.map((campo) => {
-                        if (!campoVisivel(campo, ct)) return null;
-                        return (
-                          <Input key={campo.id} label={campo.label} value={ct[campo.id] || ""} placeholder={campo.placeholder}
-                            tipo={campo.tipo} opcoes={campo.opcoes} cores={c}
-                            senhaKey={campo.tipo === "senha" ? `${campo.id}-${ct.id}` : undefined}
-                            senhasVisiveis={senhasVisiveis} toggleSenha={toggleSenha}
-                            onChange={(e) => updateConta(ct.id, campo.id, formatador(campo.tipo, e.target.value))} />
-                        );
-                      })}
+                      {CONFIG.camposConta.map((campo) => (
+                        <Input key={campo.id} label={campo.label} value={ct[campo.id] || ""} placeholder={campo.placeholder}
+                          tipo={campo.tipo} opcoes={campo.opcoes} cores={c}
+                          senhaKey={campo.tipo === "senha" ? `${campo.id}-${ct.id}` : undefined}
+                          senhasVisiveis={senhasVisiveis} toggleSenha={toggleSenha}
+                          onChange={(e) => updateConta(ct.id, campo.id, formatador(campo.tipo, e.target.value))} />
+                      ))}
                     </div>
                   </div>
                 )}
@@ -501,16 +473,6 @@ export default function App() {
 
           {/* ── IMPORTAR ── */}
           {modo === "importar" && (<>
-
-            {/* Banner */}
-            <div style={{ background: "linear-gradient(135deg, #1A3C34, #2d5c4a)", borderRadius: 14, padding: "18px 20px", marginBottom: 14, display: "flex", alignItems: "center", gap: 16 }}>
-              <span style={{ fontSize: 32, flexShrink: 0 }}>⚡</span>
-              <div>
-                <div style={{ fontFamily: "'Sora', sans-serif", fontSize: 16, fontWeight: 700, color: "#F2D645", marginBottom: 4 }}>Tem planilha? Importe direto!</div>
-                <div style={{ fontSize: 13, color: "#a8c8be", lineHeight: 1.5 }}>Cole as linhas aqui e envie tudo de uma vez — sem digitar campo por campo.</div>
-              </div>
-            </div>
-
             <div style={{ ...st.card, background: c.cardFundo }}>
 
               {/* Passo a passo */}
@@ -526,7 +488,7 @@ export default function App() {
                     <div style={{ fontFamily: "'Sora', sans-serif", fontSize: 14, fontWeight: 700, color: c.primaria, marginBottom: 3 }}>{p.titulo}</div>
                     <div style={{ fontSize: 13, color: c.textoSuave, lineHeight: 1.5 }}>{p.desc}</div>
                     {p.acao && (
-                      <button style={{ marginTop: 8, padding: "8px 16px", background: c.destaque, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, color: c.primaria, fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                      <button style={{ marginTop: 8, padding: "8px 16px", background: c.destaque, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, color: c.primaria, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer" }}
                         onClick={() => { const h = COLUNAS.map((col) => col.label).join("\t"); const b = new Blob([h + "\n"], { type: "text/plain;charset=utf-8" }); const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = "modelo_promo_smiles_mp.csv"; a.click(); URL.revokeObjectURL(u); }}>
                         ⬇ Baixar modelo
                       </button>
@@ -574,7 +536,6 @@ export default function App() {
               )}
               {textoImport && previewRows.length === 0 && <div style={{ ...st.erroBox, color: c.erroCor, marginTop: 12 }}>⚠ Nenhuma linha reconhecida. Verifique se copiou as linhas de dados (sem cabeçalho) com {COLUNAS.length} colunas separadas por TAB.</div>}
             </div>
-
             {erroMsg && <div style={{ ...st.erroBox, color: c.erroCor }}>⚠ {erroMsg}</div>}
             <button style={{ ...st.submitBtn, background: c.primaria, color: c.destaque, opacity: previewRows.length === 0 || temErrosImport() ? 0.5 : 1 }}
               onClick={handleEnviarImport} disabled={previewRows.length === 0 || temErrosImport()}>
