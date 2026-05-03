@@ -28,13 +28,53 @@ const EXEMPLO = {
   cartaoMP: "1234", dataClube: "01/03/2025", pixResp: "maria@email.com",
 };
 
-const validarCelula = (valor, tipo) => {
-  if (!valor || !valor.trim()) return "Obrigatório";
-  const v = valor.trim();
-  if (tipo === "data" && v.replace(/\D/g, "").length < 8) return "Data incompleta";
-  if (tipo === "email" && !v.includes("@")) return "Email inválido";
-  if (tipo === "tel" && v.replace(/\D/g, "").length < 10) return "Telefone inválido";
+const validarCelula = (valor, tipo, opcoes) => {
+  const v = (valor || "").toString().trim();
+  if (!v) return "Obrigatório";
+  if (tipo === "data") {
+    const nums = v.replace(/\D/g, "");
+    if (nums.length < 8) return "Data incompleta (use DD/MM/AAAA)";
+    const partes = v.split("/");
+    if (partes.length !== 3) return "Formato inválido (use DD/MM/AAAA)";
+    const dia = parseInt(partes[0]), mes = parseInt(partes[1]), ano = parseInt(partes[2]);
+    if (dia < 1 || dia > 31) return "Dia inválido";
+    if (mes < 1 || mes > 12) return "Mês inválido";
+    if (ano < 1900 || ano > 2100) return "Ano inválido";
+  }
+  if (tipo === "email") {
+    if (!v.includes("@") || !v.includes(".")) return "Email inválido";
+  }
+  if (tipo === "tel") {
+    const nums = v.replace(/\D/g, "");
+    if (nums.length < 10) return "Telefone inválido (mínimo 10 dígitos)";
+  }
+  if (tipo === "select" && opcoes) {
+    if (!opcoes.includes(v)) return `Deve ser: ${opcoes.join(" ou ")}`;
+  }
   return null;
+};
+
+// ── Normaliza cabeçalho pra matching ──
+const normalizarHeader = (h) =>
+  h.toString().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+
+// ── Tenta mapear colunas coladas pelo cabeçalho ──
+const mapearColunasPorHeader = (headerCelulas) => {
+  const mapa = {}; // índice colado → índice em COLUNAS
+  const colunasNorm = COLUNAS.map((col) => normalizarHeader(col.label));
+  headerCelulas.forEach((h, i) => {
+    const hNorm = normalizarHeader(h);
+    const match = colunasNorm.findIndex((cn) => {
+      // Match exato ou contém as palavras principais
+      if (cn === hNorm) return true;
+      const palavras = hNorm.split(" ").filter((p) => p.length > 3);
+      return palavras.length > 0 && palavras.every((p) => cn.includes(p));
+    });
+    if (match >= 0) mapa[i] = match;
+  });
+  return mapa;
 };
 
 // ── Gera colunas na ordem da planilha (B-P) ──
@@ -234,7 +274,7 @@ export default function App() {
     for (let i = 0; i < contas.length; i++) {
       for (const campo of CONFIG.camposConta) {
         if (!campoVisivel(campo, contas[i])) continue;
-        const err = validarCelula(contas[i][campo.id], campo.tipo);
+        const err = validarCelula(contas[i][campo.id], campo.tipo, campo.opcoes);
         if (err) return `Conta ${i + 1} — ${campo.label}: ${err}`;
       }
     }
@@ -248,29 +288,84 @@ export default function App() {
   });
 
   const parsearImport = (texto) => {
-    const linhas = texto.trim().split("\n");
+    const linhas = texto.trim().split("\n").map((l) => l.replace(/\r$/, ""));
     const rows = []; const erros = []; let buffer = "";
+    let mapaIdx = null; // mapa de coluna colada → índice em COLUNAS (por header)
+
     for (const linha of linhas) {
-      const lower = linha.toLowerCase();
-      if (lower.includes("parceiro responsavel") || lower.includes("preenchido pelo") || lower.includes("parceiro responsável")) continue;
+      const celulas = linha.split("\t");
+
+      // ── Detecta se é linha de cabeçalho ──
+      const primeiraCell = normalizarHeader(celulas[0] || "");
+      const ehCabecalho =
+        primeiraCell.includes("parceiro") ||
+        primeiraCell.includes("data") ||
+        primeiraCell.includes("nome") ||
+        primeiraCell.includes("preenchido") ||
+        primeiraCell.includes("contato") ||
+        // Se a maioria das células bate com labels conhecidos, é cabeçalho
+        celulas.filter((c) => {
+          const cn = normalizarHeader(c);
+          return COLUNAS.some((col) => normalizarHeader(col.label).split(" ").filter(p => p.length > 3).every(p => cn.includes(p)));
+        }).length >= Math.floor(COLUNAS.length * 0.5);
+
+      if (ehCabecalho) {
+        // Tenta mapear colunas por nome
+        const tentativa = mapearColunasPorHeader(celulas);
+        if (Object.keys(tentativa).length >= Math.floor(COLUNAS.length * 0.5)) {
+          mapaIdx = tentativa;
+        }
+        continue;
+      }
+
       const merged = buffer ? buffer + "\t" + linha.trim() : linha;
-      const celulas = merged.split("\t");
-      if (celulas.length < COLUNAS.length) { buffer = merged; continue; }
+      const celulasM = merged.split("\t");
+
+      if (celulasM.length < COLUNAS.length) { buffer = merged; continue; }
       buffer = "";
-      const vals = celulas.slice(0, COLUNAS.length).map((v) => normalizarBool(v.trim()));
+
+      let vals;
+      if (mapaIdx && Object.keys(mapaIdx).length > 0) {
+        // Usa mapeamento por header
+        vals = new Array(COLUNAS.length).fill("");
+        Object.entries(mapaIdx).forEach(([iColado, iColunas]) => {
+          vals[iColunas] = normalizarBool((celulasM[iColado] || "").trim());
+        });
+        // Preenche restantes em ordem posicional pros que não foram mapeados
+        let pos = 0;
+        vals.forEach((v, i) => {
+          if (v === "") {
+            // Acha próxima célula não usada
+            while (pos < celulasM.length && Object.keys(mapaIdx).includes(String(pos))) pos++;
+            if (pos < celulasM.length) vals[i] = normalizarBool(celulasM[pos++].trim());
+          }
+        });
+      } else {
+        // Posicional padrão
+        vals = celulasM.slice(0, COLUNAS.length).map((v) => normalizarBool(v.trim()));
+      }
+
+      // Zera cartaoMP se cartaoClube = Sim
       const idxCartaoClube = COLUNAS.findIndex((c) => c.id === "cartaoClube");
       const idxCartaoMP = COLUNAS.findIndex((c) => c.id === "cartaoMP");
-      if (idxCartaoClube >= 0 && idxCartaoMP >= 0 && vals[idxCartaoClube] === "Sim") vals[idxCartaoMP] = "";
+      if (idxCartaoClube >= 0 && idxCartaoMP >= 0 && vals[idxCartaoClube] === "Sim") {
+        vals[idxCartaoMP] = "";
+      }
+
+      // Validação — todos os campos obrigatórios
       const rowErros = {};
       COLUNAS.forEach((col, i) => {
+        // Pula campo condicional que não se aplica
         if (col.condicional) {
           const idxDep = COLUNAS.findIndex((c) => c.id === col.condicional.campo);
           if (idxDep >= 0 && vals[idxDep] !== col.condicional.valor) return;
         }
-        const err = validarCelula(vals[i], col.tipo);
-        if (err) rowErros[i] = err;
+        const err = validarCelula(vals[i], col.tipo, col.opcoes);
+        if (err) rowErros[i] = `${col.label}: ${err}`;
       });
-      rows.push(vals); erros.push(rowErros);
+
+      rows.push(vals);
+      erros.push(rowErros);
     }
     return { rows, erros };
   };
@@ -552,7 +647,9 @@ export default function App() {
               {previewRows.length > 0 && (
                 <div style={st.previewBox}>
                   <div style={{ ...st.previewHeader, color: temErrosImport() ? c.erroCor : "#16a34a", background: temErrosImport() ? "#fef2f2" : "#f0fdf4" }}>
-                    {temErrosImport() ? `⚠ Corrija os campos em vermelho` : `✓ ${previewRows.length} linha(s) prontas para envio`}
+                    {temErrosImport()
+                      ? `⚠ ${previewRows.filter((_, i) => Object.keys(previewErros[i] || {}).length > 0).length} linha(s) com erro — corrija antes de enviar`
+                      : `✓ ${previewRows.length} linha(s) prontas para envio`}
                   </div>
                   <div style={st.previewScroll}>
                     <table style={st.previewTable}>
