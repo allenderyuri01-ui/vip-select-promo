@@ -195,6 +195,7 @@ export default function App() {
 
   // Admin
   const [adminSenha, setAdminSenha] = useState("");
+  const [adminLogado, setAdminLogado] = useState(false);
   const [adminErro, setAdminErro] = useState("");
   const [promos, setPromos] = useState([]);
   const [novaPromoNome, setNovaPromoNome] = useState("");
@@ -226,7 +227,7 @@ export default function App() {
     setAdminErro(""); setAdminCarregando(true);
     try {
       const data = await apiGet({ action: "admin_login", senha: adminSenha });
-      if (data.ok) { setTela("admin"); listarPromos(); }
+      if (data.ok) { setAdminLogado(true); setTela("admin"); listarPromos(); }
       else setAdminErro("Senha incorreta.");
     } catch { setAdminErro("Erro de conexão."); }
     setAdminCarregando(false);
@@ -445,6 +446,14 @@ export default function App() {
       <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
       <div style={{ ...st.topBand, background: `linear-gradient(90deg, ${c.primaria}, ${c.destaque}, ${c.primaria})` }}><div style={st.bandPattern} /></div>
 
+      {/* Botão flutuante — só aparece quando admin está logado e não está no painel */}
+      {adminLogado && tela !== "admin" && tela !== "admin-login" && (
+        <button onClick={() => { setTela("admin"); listarPromos(); }}
+          style={{ position: "fixed", top: 14, right: 16, zIndex: 999, background: c.primaria, color: c.destaque, border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", boxShadow: "0 2px 12px #00000030", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+          ⚙ Painel
+        </button>
+      )}
+
       {/* LOADING */}
       {tela === "loading" && <div style={st.statusBox}><div style={{ ...st.spinner, borderTopColor: c.primaria }} /><p style={{ color: c.textoSuave }}>Verificando acesso...</p></div>}
 
@@ -476,7 +485,7 @@ export default function App() {
         <section style={{ ...st.formWrap, paddingTop: 30 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
             <h2 style={{ ...st.cardTitle, color: c.texto, margin: 0 }}>Painel — {CONFIG.empresa}</h2>
-            <button style={{ ...st.linkBtn, fontSize: 12 }} onClick={() => { setTela("fechado"); setAdminSenha(""); }}>Sair</button>
+            <button style={{ ...st.linkBtn, fontSize: 12 }} onClick={() => { setTela("fechado"); setAdminSenha(""); setAdminLogado(false); }}>Sair</button>
           </div>
           <div style={{ ...st.card, background: c.cardFundo }}>
             <h3 style={{ ...st.cardTitle2, color: c.texto, marginBottom: 12 }}>Nova promoção</h3>
