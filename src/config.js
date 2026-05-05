@@ -80,21 +80,26 @@ const CONFIG = {
       ],
 
       camposConta: [
-        { id: "nomeTitular", coluna: "D", label: "Nome titular da conta",                  placeholder: "Nome completo",          tipo: "text"   },
-        { id: "dataNasc",    coluna: "E", label: "Data de nascimento (titular)",            placeholder: "DD/MM/AAAA",             tipo: "data"   },
-        { id: "telTitular",  coluna: "F", label: "Telefone (titular da conta)",             placeholder: "(21) 99999-9999",        tipo: "tel"    },
-        { id: "emailConta",  coluna: "G", label: "E-mail (registrado na conta)",            placeholder: "email@exemplo.com",      tipo: "email"  },
-        { id: "loginSmiles", coluna: "H", label: "Login Smiles",                            placeholder: "email ou CPF",           tipo: "text"   },
-        { id: "senhaSmiles", coluna: "I", label: "Senha Smiles",                            placeholder: "••••••••",               tipo: "senha"  },
-        { id: "loginLivelo", coluna: "J", label: "Login Livelo",                            placeholder: "email ou CPF",           tipo: "text"   },
-        { id: "senhaLivelo", coluna: "K", label: "Senha Livelo",                            placeholder: "••••••••",               tipo: "senha"  },
-        { id: "cartaoClube", coluna: "L", label: "Usou cartão próprio no clube?",           placeholder: "",                       tipo: "select", opcoes: ["Sim", "Não"] },
-        { id: "cartaoMP",    coluna: "M", label: "Cartão MP utilizado (últimos 4 dígitos)", placeholder: "Ex: 1234",               tipo: "text",  condicional: { campo: "cartaoClube", valor: "Não" } },
-        { id: "dataClube",   coluna: "N", label: "Data da assinatura do clube",             placeholder: "DD/MM/AAAA",             tipo: "data"   },
-        { id: "pixResp",     coluna: "O", label: "Pix para recebimento",                    placeholder: "CPF, email ou telefone", tipo: "text"   },
-      ],
-    },
+  { id: "nomeTitular", coluna: "D", label: "Nome titular da conta",                  placeholder: "Nome completo",          tipo: "text"   },
+  { id: "dataNasc",    coluna: "E", label: "Data de nascimento (do titular da conta)", placeholder: "DD/MM/AAAA",           tipo: "data"   },
+  { id: "telTitular",  coluna: "F", label: "Telefone (do titular da conta)",          placeholder: "(21) 99999-9999",        tipo: "tel"    },
+  { id: "emailConta",  coluna: "G", label: "E-mail (registrado na conta)",            placeholder: "email@exemplo.com",      tipo: "email"  },
+  { id: "loginSmiles", coluna: "H", label: "Login Smiles",                            placeholder: "email ou CPF",           tipo: "text"   },
+  { id: "senhaSmiles", coluna: "I", label: "Senha Smiles",                            placeholder: "••••••••",               tipo: "senha"  },
+
+  { id: "prazo",       coluna: "J", label: "Prazo de pagamento",                      placeholder: "30 dias / exceção...",   tipo: "text"   },
+  { id: "saldo",       coluna: "K", label: "Saldo ofertado para venda",               placeholder: "Ex: 50000",              tipo: "text"   },
+
+  { id: "temPontos",   coluna: "L", label: "A conta possui pontos além da oferta de venda?", placeholder: "", tipo: "select", opcoes: ["Sim", "Não"] },
+
+  { id: "totalSaldo",  coluna: "M", label: "Total de saldo na conta",                 placeholder: "Ex: 80000",              tipo: "text",
+    condicional: { campo: "temPontos", valor: "Sim" }
   },
-};
+
+  { id: "cpfs",        coluna: "N", label: "CPFs disponíveis (rec. todos)",           placeholder: "CPF1, CPF2...",          tipo: "text"   },
+  { id: "cartaoMP",    coluna: "O", label: "Cartão MP utilizado",                     placeholder: "Últimos 4 dígitos",      tipo: "text"   },
+  { id: "dataClube",   coluna: "P", label: "Data da assinatura do clube",             placeholder: "DD/MM/AAAA",             tipo: "data"   },
+  { id: "pixResp",     coluna: "Q", label: "Pix para recebimento",                    placeholder: "CPF, email ou telefone", tipo: "text"   },
+]
 
 export default CONFIG;
