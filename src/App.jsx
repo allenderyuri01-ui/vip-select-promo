@@ -201,6 +201,8 @@ export default function App() {
   const [novaPromoNome, setNovaPromoNome] = useState("");
   const [adminCarregando, setAdminCarregando] = useState(false);
   const [copiado, setCopiado] = useState("");
+  const [stats, setStats] = useState(null);
+  const [adminAba, setAdminAba] = useState("promos"); // "promos" | "nova"
 
   const c = CONFIG.cores;
 
@@ -234,7 +236,15 @@ export default function App() {
   };
   const listarPromos = async () => {
     setAdminCarregando(true);
-    try { const data = await apiGet({ action: "listar_promos", senha: adminSenha }); setPromos(data.promos || []); } catch { }
+    try {
+      const data = await apiGet({ action: "listar_promos", senha: adminSenha });
+      const lista = data.promos || [];
+      setPromos(lista);
+      // Calcula stats localmente a partir das promos
+      const ativas = lista.filter((p) => p.status === "ativa").length;
+      const inativas = lista.filter((p) => p.status !== "ativa").length;
+      setStats({ total: lista.length, ativas, inativas });
+    } catch { }
     setAdminCarregando(false);
   };
   const criarPromo = async () => {
@@ -469,57 +479,136 @@ export default function App() {
 
       {/* ADMIN LOGIN */}
       {tela === "admin-login" && (
-        <div style={st.statusBox}>
-          <h2 style={{ ...st.statusTitle, color: c.texto }}>Painel Administrativo</h2>
-          <p style={{ ...st.statusSub, color: c.textoSuave, marginBottom: 20 }}>Digite a senha</p>
-          <input style={{ ...st.input, maxWidth: 300, margin: "0 auto", textAlign: "center", background: c.inputFundo, borderColor: c.inputBorda, color: c.texto }}
-            type="password" placeholder="Senha" value={adminSenha} onChange={(e) => setAdminSenha(e.target.value)} onKeyDown={(e) => e.key === "Enter" && adminLogin()} />
-          {adminErro && <p style={{ color: c.erroCor, fontSize: 13, marginTop: 10 }}>{adminErro}</p>}
-          <button style={{ ...st.submitBtn, maxWidth: 300, margin: "16px auto 0", background: c.primaria, color: c.destaque }} onClick={adminLogin} disabled={adminCarregando}>{adminCarregando ? "..." : "Entrar"}</button>
-          <button style={{ ...st.linkBtn, marginTop: 16 }} onClick={() => setTela("fechado")}>← Voltar</button>
+        <div style={{ minHeight: "100vh", background: c.primaria, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ background: "#fff", borderRadius: 20, padding: "40px 32px", width: "100%", maxWidth: 360, boxShadow: "0 20px 60px #00000030" }}>
+            <div style={{ textAlign: "center", marginBottom: 28 }}>
+              <div style={{ fontSize: 36, marginBottom: 10 }}>⚙</div>
+              <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 20, fontWeight: 800, color: c.primaria, marginBottom: 4 }}>Painel Admin</h2>
+              <p style={{ fontSize: 13, color: c.textoSuave }}>{CONFIG.empresa}</p>
+            </div>
+            <input style={{ ...st.input, background: "#fafaf6", borderColor: c.inputBorda, color: c.texto, marginBottom: 12, textAlign: "center" }}
+              type="password" placeholder="Digite a senha" value={adminSenha}
+              onChange={(e) => setAdminSenha(e.target.value)} onKeyDown={(e) => e.key === "Enter" && adminLogin()} />
+            {adminErro && <p style={{ color: c.erroCor, fontSize: 13, marginBottom: 10, textAlign: "center" }}>{adminErro}</p>}
+            <button style={{ ...st.submitBtn, background: c.primaria, color: c.destaque }} onClick={adminLogin} disabled={adminCarregando}>
+              {adminCarregando ? "Entrando..." : "Entrar"}
+            </button>
+            <button style={{ ...st.linkBtn, display: "block", textAlign: "center", marginTop: 16, width: "100%" }} onClick={() => setTela("fechado")}>← Voltar</button>
+          </div>
         </div>
       )}
 
       {/* ADMIN DASHBOARD */}
       {tela === "admin" && (
-        <section style={{ ...st.formWrap, paddingTop: 30 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <h2 style={{ ...st.cardTitle, color: c.texto, margin: 0 }}>Painel — {CONFIG.empresa}</h2>
-            <button style={{ ...st.linkBtn, fontSize: 12 }} onClick={() => { setTela("fechado"); setAdminSenha(""); setAdminLogado(false); }}>Sair</button>
-          </div>
-          <div style={{ ...st.card, background: c.cardFundo }}>
-            <h3 style={{ ...st.cardTitle2, color: c.texto, marginBottom: 12 }}>Nova promoção</h3>
-            <div className="search-bar" style={{ display: "flex", gap: 10 }}>
-              <input style={{ ...st.input, flex: 1, background: c.inputFundo, borderColor: c.inputBorda, color: c.texto }}
-                placeholder="Nome (ex: Promo Smiles Mai26)" value={novaPromoNome} onChange={(e) => setNovaPromoNome(e.target.value)} onKeyDown={(e) => e.key === "Enter" && criarPromo()} />
-              <button style={{ ...st.submitBtn, width: "auto", padding: "11px 20px", background: c.primaria, color: c.destaque, fontSize: 14 }}
-                onClick={criarPromo} disabled={adminCarregando || !novaPromoNome.trim()}>+ Criar</button>
-            </div>
-          </div>
-          <div style={{ ...st.card, background: c.cardFundo }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h3 style={{ ...st.cardTitle2, color: c.texto }}>Promoções</h3>
-              <button style={{ ...st.linkBtn, fontSize: 11 }} onClick={listarPromos}>↻ Atualizar</button>
-            </div>
-            {promos.length === 0 && <p style={{ color: c.textoSuave, fontSize: 13 }}>{adminCarregando ? "Carregando..." : "Nenhuma promoção."}</p>}
-            {promos.map((promo, i) => (
-              <div key={i} style={{ padding: "14px 0", borderTop: i > 0 ? "1px solid #f0ede6" : "none" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <div><strong style={{ fontSize: 15 }}>{promo.nome}</strong>
-                    <span style={{ marginLeft: 10, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12, background: promo.status === "ativa" ? "#f0fdf4" : "#fef2f2", color: promo.status === "ativa" ? "#16a34a" : "#dc2626" }}>
-                      {promo.status === "ativa" ? "● Ativa" : "○ Inativa"}
-                    </span></div>
-                </div>
-                <div style={{ fontSize: 12, color: c.textoSuave, marginBottom: 8 }}>Token: <code style={{ background: "#f5f3ee", padding: "2px 6px", borderRadius: 4 }}>{promo.token}</code></div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button style={{ ...st.miniBtn, background: c.destaque, color: c.primaria }} onClick={() => copiarLink(promo.token)}>{copiado === promo.token ? "✓ Copiado!" : "📋 Copiar link"}</button>
-                  <button style={{ ...st.miniBtn, background: promo.status === "ativa" ? "#fef2f2" : "#f0fdf4", color: promo.status === "ativa" ? "#dc2626" : "#16a34a" }}
-                    onClick={() => togglePromo(promo.token, promo.status)}>{promo.status === "ativa" ? "⏸ Desativar" : "▶ Ativar"}</button>
-                </div>
+        <div style={{ minHeight: "100vh", background: "#f0ede6" }}>
+          {/* Header */}
+          <div style={{ background: c.primaria, padding: "0 24px" }}>
+            <div style={{ maxWidth: 700, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", height: 56 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 20 }}>⚙</span>
+                <span style={{ fontFamily: "'Sora', sans-serif", fontWeight: 700, fontSize: 15, color: "#fff" }}>Painel Admin</span>
+                <span style={{ fontSize: 12, color: c.destaque, fontWeight: 600 }}>— {CONFIG.empresa}</span>
               </div>
-            ))}
+              <button style={{ background: "none", border: "1px solid #ffffff30", color: "#fff", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer" }}
+                onClick={() => { setTela("fechado"); setAdminSenha(""); setAdminLogado(false); }}>Sair</button>
+            </div>
           </div>
-        </section>
+
+          <div style={{ maxWidth: 700, margin: "0 auto", padding: "24px 16px" }}>
+
+            {/* Stats cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+              {[
+                { label: "Total de promoções", valor: stats?.total ?? "—", icon: "📋", cor: c.primaria },
+                { label: "Promoções ativas", valor: stats?.ativas ?? "—", icon: "🟢", cor: "#16a34a" },
+                { label: "Encerradas", valor: stats?.inativas ?? "—", icon: "⏸", cor: "#6a8a80" },
+              ].map((s, i) => (
+                <div key={i} style={{ background: "#fff", borderRadius: 14, padding: "16px 18px", boxShadow: "0 1px 4px #00000010" }}>
+                  <div style={{ fontSize: 20, marginBottom: 6 }}>{s.icon}</div>
+                  <div style={{ fontFamily: "'Sora', sans-serif", fontSize: 26, fontWeight: 800, color: s.cor, lineHeight: 1 }}>{s.valor}</div>
+                  <div style={{ fontSize: 11, color: c.textoSuave, marginTop: 4, fontWeight: 500 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: "flex", gap: 4, background: "#e0ddd5", borderRadius: 10, padding: 4, marginBottom: 16 }}>
+              {[
+                { key: "promos", label: "📋 Promoções" },
+                { key: "nova", label: "➕ Nova promoção" },
+              ].map((tab) => (
+                <button key={tab.key}
+                  style={{ flex: 1, padding: "9px 12px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer", background: adminAba === tab.key ? c.primaria : "transparent", color: adminAba === tab.key ? c.destaque : c.textoSuave, transition: "all .15s" }}
+                  onClick={() => setAdminAba(tab.key)}>{tab.label}</button>
+              ))}
+            </div>
+
+            {/* Nova promoção */}
+            {adminAba === "nova" && (
+              <div style={{ background: "#fff", borderRadius: 14, padding: "22px", boxShadow: "0 1px 4px #00000010" }}>
+                <h3 style={{ fontFamily: "'Sora', sans-serif", fontSize: 16, fontWeight: 700, color: c.texto, marginBottom: 18 }}>Criar nova promoção</h3>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ ...st.label, color: c.textoSuave, marginBottom: 6, display: "block" }}>Nome da promoção</label>
+                  <input style={{ ...st.input, background: "#fafaf6", borderColor: c.inputBorda, color: c.texto }}
+                    placeholder="Ex: Smiles Maio 2026" value={novaPromoNome}
+                    onChange={(e) => setNovaPromoNome(e.target.value)} onKeyDown={(e) => e.key === "Enter" && criarPromo()} />
+                </div>
+                <button style={{ ...st.submitBtn, background: c.primaria, color: c.destaque, marginTop: 4 }}
+                  onClick={criarPromo} disabled={adminCarregando || !novaPromoNome.trim()}>
+                  {adminCarregando ? "Criando..." : "Criar promoção"}<span style={st.arrow}>→</span>
+                </button>
+              </div>
+            )}
+
+            {/* Lista de promoções */}
+            {adminAba === "promos" && (
+              <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 1px 4px #00000010", overflow: "hidden" }}>
+                <div style={{ padding: "16px 20px", borderBottom: "1px solid #f0ede6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontFamily: "'Sora', sans-serif", fontWeight: 700, fontSize: 15, color: c.texto }}>Promoções</span>
+                  <button style={{ ...st.miniBtn, background: "#f0ede6", color: c.textoSuave, fontSize: 11 }} onClick={listarPromos}>↻ Atualizar</button>
+                </div>
+
+                {adminCarregando && promos.length === 0 && (
+                  <div style={{ padding: 24, textAlign: "center", color: c.textoSuave, fontSize: 13 }}>Carregando...</div>
+                )}
+                {!adminCarregando && promos.length === 0 && (
+                  <div style={{ padding: 32, textAlign: "center" }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
+                    <p style={{ color: c.textoSuave, fontSize: 13 }}>Nenhuma promoção ainda.</p>
+                    <button style={{ ...st.miniBtn, background: c.destaque, color: c.primaria, marginTop: 12, fontSize: 13 }} onClick={() => setAdminAba("nova")}>Criar primeira promoção</button>
+                  </div>
+                )}
+
+                {promos.map((promo, i) => (
+                  <div key={i} style={{ padding: "16px 20px", borderTop: i > 0 ? "1px solid #f5f3ee" : "none", display: "flex", alignItems: "center", gap: 14 }}>
+                    {/* Status dot */}
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: promo.status === "ativa" ? "#16a34a" : "#d1d5db", flexShrink: 0 }} />
+
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: c.texto, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{promo.nome}</div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                        <span style={{ fontSize: 11, color: promo.status === "ativa" ? "#16a34a" : c.textoSuave, fontWeight: 600 }}>{promo.status === "ativa" ? "Ativa" : "Encerrada"}</span>
+                        <span style={{ fontSize: 11, color: "#ccc" }}>·</span>
+                        <code style={{ fontSize: 11, background: "#f5f3ee", padding: "2px 6px", borderRadius: 4, color: c.textoSuave }}>{promo.token}</code>
+                        {promo.data && <span style={{ fontSize: 11, color: "#ccc" }}>· {promo.data}</span>}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button style={{ padding: "6px 12px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer", background: c.destaque, color: c.primaria }}
+                        onClick={() => copiarLink(promo.token)}>{copiado === promo.token ? "✓" : "🔗 Link"}</button>
+                      <button style={{ padding: "6px 12px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer", background: promo.status === "ativa" ? "#fef2f2" : "#f0fdf4", color: promo.status === "ativa" ? "#dc2626" : "#16a34a" }}
+                        onClick={() => togglePromo(promo.token, promo.status)}>{promo.status === "ativa" ? "⏸ Encerrar" : "▶ Reativar"}</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+          </div>
+        </div>
       )}
 
       {/* HERO */}
