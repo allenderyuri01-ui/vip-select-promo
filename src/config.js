@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  CONFIG — Formulário Smiles · Milhas Plus                   ║
+// ║  CONFIG — Milhas Plus · Formulário de Fornecedores          ║
 // ╚══════════════════════════════════════════════════════════════╝
 
 const CONFIG = {
@@ -7,49 +7,14 @@ const CONFIG = {
   empresa: "Milhas Plus",
   titulo: "Cadastre suas",
   tituloDestaque: "contas",
-  subtitulo: "Preencha os dados das contas Smiles e Livelo de forma rápida e segura.",
+  subtitulo: "Preencha os dados das suas contas de forma rápida e segura.",
   rodape: "Milhas Plus © 2026",
-  mensagemSucesso: "Contas registradas com sucesso!",
+  mensagemSucesso: "Cadastro registrado com sucesso!",
 
-  // ── APPS SCRIPT ──
   appsScriptUrl: "https://script.google.com/macros/s/AKfycbyIR0MgKn6V67xI1GLN1oklSIRrwIyC4uokz_06CEVwPatP2eYrVymtyH7D7QH-G_sDHw/exec",
 
-  // ── PLANILHA ──
-  // O script usa openById, então o ID fica no script, não aqui.
-  // A aba fixa é "base fixa" — configurada no script.
-
-  // ── ACESSO ──
   permitirImportacao: true,
   permitirConsulta: true,
-
-  // ══════════════════════════════════════════
-  // COLUNAS DA PLANILHA (A-P) — na ordem exata
-  // A coluna A (DATA) é preenchida automaticamente.
-  // ══════════════════════════════════════════
-
-  // Campos do PARCEIRO RESPONSÁVEL (preenchidos 1x, repetidos em cada linha)
-  camposResponsavel: [
-    { id: "parceiroResp",   coluna: "B", label: "Parceiro responsável",           placeholder: "Seu nome",                    tipo: "text" },
-    { id: "telResp",        coluna: "C", label: "Telefone (parceiro responsável)", placeholder: "(21) 99999-9999",             tipo: "tel" },
-    { id: "pixResp",        coluna: "Q", label: "Pix parceiro responsável",        placeholder: "CPF, email ou telefone",      tipo: "text" },
-  ],
-
-  // Campos de cada CONTA (repetidos por conta adicionada)
-  camposConta: [
-    { id: "nomeTitular",    coluna: "D", label: "Nome titular da conta",                placeholder: "Nome completo",          tipo: "text" },
-    { id: "dataNasc",       coluna: "E", label: "Data de nascimento (titular)",         placeholder: "DD/MM/AAAA",             tipo: "data" },
-    { id: "telTitular",     coluna: "F", label: "Telefone (titular da conta)",          placeholder: "(21) 99999-9999",        tipo: "tel" },
-    { id: "emailConta",     coluna: "G", label: "E-mail (registrado na conta)",         placeholder: "email@exemplo.com",      tipo: "email" },
-    { id: "loginSmiles",    coluna: "H", label: "Login Smiles",                         placeholder: "email ou CPF",           tipo: "text" },
-    { id: "senhaSmiles",    coluna: "I", label: "Senha Smiles",                         placeholder: "••••••••",               tipo: "senha" },
-    { id: "loginLivelo",    coluna: "J", label: "Login Livelo",                         placeholder: "email ou CPF",           tipo: "text" },
-    { id: "senhaLivelo",    coluna: "K", label: "Senha Livelo",                         placeholder: "••••••••",               tipo: "senha" },
-    { id: "prazo",          coluna: "L", label: "Prazo de pagamento",                   placeholder: "Ex: 30 dias",            tipo: "text" },
-    { id: "contaCheia",     coluna: "M", label: "Conta cheia?",                         placeholder: "",                       tipo: "select", opcoes: ["Sim", "Não"] },
-    { id: "cartaoClube",    coluna: "N", label: "Usou cartão próprio no clube?",         placeholder: "",                       tipo: "select", opcoes: ["Sim", "Não"] },
-    { id: "cartaoMP",       coluna: "O", label: "Cartão MP utilizado (últimos 4 dígitos)", placeholder: "Ex: 1234",             tipo: "text", condicional: { campo: "cartaoClube", valor: "Não" } },
-    { id: "dataClube",      coluna: "P", label: "Data da assinatura do clube",          placeholder: "DD/MM/AAAA",             tipo: "data" },
-  ],
 
   // ── CORES ──
   cores: {
@@ -62,6 +27,73 @@ const CONFIG = {
     inputFundo: "#FAFAF6",
     inputBorda: "#e0ddd5",
     erroCor:    "#dc2626",
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // TIPOS DE FORMULÁRIO
+  // Coluna A = DATA (timestamp automático)
+  // Colunas B em diante = dados do fornecedor
+  // ══════════════════════════════════════════════════════════════
+
+  tipos: {
+
+    // ── VENDA DE CONTA — 16 campos (B-Q) + timestamp A ──
+    "venda-conta": {
+      label: "Venda de Conta",
+      descricao: "Fornecedor vende a conta vazia para abastecimento",
+      aba: "VENDA DE CONTA",
+      emoji: "🏦",
+
+      camposResponsavel: [
+        { id: "parceiroResp", coluna: "B", label: "Parceiro responsável",           placeholder: "Seu nome",        tipo: "text" },
+        { id: "telResp",      coluna: "C", label: "Telefone (parceiro responsável)", placeholder: "(21) 99999-9999", tipo: "tel"  },
+      ],
+
+      camposConta: [
+        { id: "nomeTitular", coluna: "D", label: "Nome titular da conta",                placeholder: "Nome completo",          tipo: "text"   },
+        { id: "dataNasc",    coluna: "E", label: "Data de nascimento (titular)",         placeholder: "DD/MM/AAAA",             tipo: "data"   },
+        { id: "telTitular",  coluna: "F", label: "Telefone (titular da conta)",          placeholder: "(21) 99999-9999",        tipo: "tel"    },
+        { id: "emailConta",  coluna: "G", label: "E-mail (registrado na conta)",         placeholder: "email@exemplo.com",      tipo: "email"  },
+        { id: "loginSmiles", coluna: "H", label: "Login Smiles",                         placeholder: "email ou CPF",           tipo: "text"   },
+        { id: "senhaSmiles", coluna: "I", label: "Senha Smiles",                         placeholder: "••••••••",               tipo: "senha"  },
+        { id: "prazo",       coluna: "J", label: "Prazo de pagamento",                   placeholder: "Ex: 30 dias",            tipo: "text"   },
+        { id: "saldo",       coluna: "K", label: "Saldo ofertado para venda",            placeholder: "Ex: 50000",              tipo: "text"   },
+        { id: "temPontos",   coluna: "L", label: "A conta possui pontos além da oferta?",placeholder: "",                       tipo: "select", opcoes: ["Sim", "Não"] },
+        { id: "totalSaldo",  coluna: "M", label: "Total de saldo na conta",              placeholder: "Ex: 80000",              tipo: "text",  condicional: { campo: "temPontos", valor: "Sim" } },
+        { id: "cpfs",        coluna: "N", label: "CPFs disponíveis (rec. todos)",        placeholder: "CPF1, CPF2...",          tipo: "text"   },
+        { id: "cartaoMP",    coluna: "O", label: "Cartão MP utilizado",                  placeholder: "Últimos 4 dígitos",      tipo: "text"   },
+        { id: "dataClube",   coluna: "P", label: "Data da assinatura do clube",          placeholder: "DD/MM/AAAA",             tipo: "data"   },
+        { id: "pixResp",     coluna: "Q", label: "Pix para recebimento",                 placeholder: "CPF, email ou telefone", tipo: "text"   },
+      ],
+    },
+
+    // ── VENDA DE SALDO — 14 campos (B-O) + timestamp A ──
+    "venda-saldo": {
+      label: "Venda de Saldo",
+      descricao: "Fornecedor faz abastecimento próprio e vende as milhas",
+      aba: "VENDA DE SALDO",
+      emoji: "✈️",
+
+      camposResponsavel: [
+        { id: "parceiroResp", coluna: "B", label: "Parceiro responsável",           placeholder: "Seu nome",        tipo: "text" },
+        { id: "telResp",      coluna: "C", label: "Telefone (parceiro responsável)", placeholder: "(21) 99999-9999", tipo: "tel"  },
+      ],
+
+      camposConta: [
+        { id: "nomeTitular", coluna: "D", label: "Nome titular da conta",                  placeholder: "Nome completo",          tipo: "text"   },
+        { id: "dataNasc",    coluna: "E", label: "Data de nascimento (titular)",            placeholder: "DD/MM/AAAA",             tipo: "data"   },
+        { id: "telTitular",  coluna: "F", label: "Telefone (titular da conta)",             placeholder: "(21) 99999-9999",        tipo: "tel"    },
+        { id: "emailConta",  coluna: "G", label: "E-mail (registrado na conta)",            placeholder: "email@exemplo.com",      tipo: "email"  },
+        { id: "loginSmiles", coluna: "H", label: "Login Smiles",                            placeholder: "email ou CPF",           tipo: "text"   },
+        { id: "senhaSmiles", coluna: "I", label: "Senha Smiles",                            placeholder: "••••••••",               tipo: "senha"  },
+        { id: "loginLivelo", coluna: "J", label: "Login Livelo",                            placeholder: "email ou CPF",           tipo: "text"   },
+        { id: "senhaLivelo", coluna: "K", label: "Senha Livelo",                            placeholder: "••••••••",               tipo: "senha"  },
+        { id: "cartaoClube", coluna: "L", label: "Usou cartão próprio no clube?",           placeholder: "",                       tipo: "select", opcoes: ["Sim", "Não"] },
+        { id: "cartaoMP",    coluna: "M", label: "Cartão MP utilizado (últimos 4 dígitos)", placeholder: "Ex: 1234",               tipo: "text",  condicional: { campo: "cartaoClube", valor: "Não" } },
+        { id: "dataClube",   coluna: "N", label: "Data da assinatura do clube",             placeholder: "DD/MM/AAAA",             tipo: "data"   },
+        { id: "pixResp",     coluna: "O", label: "Pix para recebimento",                    placeholder: "CPF, email ou telefone", tipo: "text"   },
+      ],
+    },
   },
 };
 

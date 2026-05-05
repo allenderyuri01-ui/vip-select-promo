@@ -61,13 +61,12 @@ const normalizarHeader = (h) =>
     .replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
 
 // ── Tenta mapear colunas coladas pelo cabeçalho ──
-const mapearColunasPorHeader = (headerCelulas) => {
-  const mapa = {}; // índice colado → índice em COLUNAS
-  const colunasNorm = COLUNAS.map((col) => normalizarHeader(col.label));
+const mapearColunasPorHeader = (headerCelulas, colunas) => {
+  const mapa = {};
+  const colunasNorm = colunas.map((col) => normalizarHeader(col.label));
   headerCelulas.forEach((h, i) => {
     const hNorm = normalizarHeader(h);
     const match = colunasNorm.findIndex((cn) => {
-      // Match exato ou contém as palavras principais
       if (cn === hNorm) return true;
       const palavras = hNorm.split(" ").filter((p) => p.length > 3);
       return palavras.length > 0 && palavras.every((p) => cn.includes(p));
@@ -77,32 +76,48 @@ const mapearColunasPorHeader = (headerCelulas) => {
   return mapa;
 };
 
-// ── Gera colunas na ordem da planilha (B-P) ──
-const gerarColunas = () => {
-  const todos = [
-    ...CONFIG.camposResponsavel.map((c) => ({ ...c, grupo: "resp" })),
-    ...CONFIG.camposConta.map((c) => ({ ...c, grupo: "conta" })),
-  ];
-  todos.sort((a, b) => a.coluna.localeCompare(b.coluna));
-  return todos;
+const EXEMPLOS = {
+  "venda-conta": {
+    parceiroResp: "Maria Silva", telResp: "(21) 98765-4321",
+    nomeTitular: "João da Silva", dataNasc: "15/06/1990",
+    telTitular: "(21) 91234-5678", emailConta: "joao@gmail.com",
+    loginSmiles: "joao@gmail.com", senhaSmiles: "Senha@123",
+    prazo: "30 dias", saldo: "50000", temPontos: "Não",
+    totalSaldo: "", cpfs: "123.456.789-00", cartaoMP: "1234",
+    dataClube: "01/03/2025", pixResp: "maria@email.com",
+  },
+  "venda-saldo": {
+    parceiroResp: "Carlos Souza", telResp: "(21) 97654-3210",
+    nomeTitular: "Ana Lima", dataNasc: "22/08/1985",
+    telTitular: "(21) 96543-2109", emailConta: "ana@gmail.com",
+    loginSmiles: "ana@gmail.com", senhaSmiles: "Senha@456",
+    loginLivelo: "ana@gmail.com", senhaLivelo: "Livelo@789",
+    cartaoClube: "Não", cartaoMP: "5678",
+    dataClube: "15/01/2025", pixResp: "carlos@email.com",
+  },
 };
-const COLUNAS = gerarColunas();
-const COLUNAS_LABELS = COLUNAS.map((c) => c.label.toUpperCase());
 
-// ── Conta vazia ──
-const criarContaVazia = () => {
+// ── Gera colunas dinamicamente por tipo ──
+const getColunas = (tipo) => {
+  const t = CONFIG.tipos[tipo];
+  if (!t) return [];
+  return [
+    ...t.camposResponsavel.map((c) => ({ ...c, grupo: "resp" })),
+    ...t.camposConta.map((c) => ({ ...c, grupo: "conta" })),
+  ].sort((a, b) => a.coluna.localeCompare(b.coluna));
+};
+
+// ── Conta vazia por tipo ──
+const criarContaVazia = (tipo) => {
+  const t = CONFIG.tipos[tipo];
   const e = { id: Date.now() + Math.random() };
-  CONFIG.camposConta.forEach((c) => { e[c.id] = ""; });
+  if (t) t.camposConta.forEach((c) => { e[c.id] = ""; });
   return e;
 };
 
-// ── Row pra array na ordem das colunas (B-P) ──
-const rowParaArray = (respDados, contaDados) => {
-  return COLUNAS.map((col) => {
-    if (col.grupo === "resp") return respDados[col.id] || "";
-    return contaDados[col.id] || "";
-  });
-};
+// ── Row pra array na ordem das colunas ──
+const rowParaArray = (colunas, respDados, contaDados) =>
+  colunas.map((col) => col.grupo === "resp" ? respDados[col.id] || "" : contaDados[col.id] || "");
 
 // ── Timestamp BR ──
 const agora = () => {
@@ -167,12 +182,11 @@ export default function App() {
   const [tela, setTela] = useState("loading");
   const [modo, setModo] = useState("manual");
   const [promoAtual, setPromoAtual] = useState(null);
-  const [tokenAtual, setTokenAtual] = useState("");
 
   // Responsável
   const [resp, setResp] = useState({});
   // Contas
-  const [contas, setContas] = useState([criarContaVazia()]);
+  const [contas, setContas] = useState([criarContaVazia("venda-conta")]);
   const [erroMsg, setErroMsg] = useState("");
   const [senhasVisiveis, setSenhasVisiveis] = useState({});
   const [expandido, setExpandido] = useState({});
@@ -199,19 +213,26 @@ export default function App() {
   const [adminErro, setAdminErro] = useState("");
   const [promos, setPromos] = useState([]);
   const [novaPromoNome, setNovaPromoNome] = useState("");
+  const [novaPromoTipo, setNovaPromoTipo] = useState("venda-conta");
   const [adminCarregando, setAdminCarregando] = useState(false);
   const [copiado, setCopiado] = useState("");
   const [stats, setStats] = useState(null);
-  const [adminAba, setAdminAba] = useState("promos"); // "promos" | "nova"
+  const [adminAba, setAdminAba] = useState("promos");
 
   const c = CONFIG.cores;
+
+  // Derivados do tipo da promo atual
+  const tipoAtual = promoAtual?.tipo || "venda-conta";
+  const tipoConfig = CONFIG.tipos[tipoAtual];
+  const COLUNAS = getColunas(tipoAtual);
+  const EXEMPLO = EXEMPLOS[tipoAtual] || {};
 
   // ── Init ──
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("t");
     const admin = params.get("admin");
-    if (token) { setTokenAtual(token); validarToken(token); }
+    if (token) { validarToken(token); }
     else if (admin !== null) setTela("admin-login");
     else setTela("fechado");
   }, []);
@@ -219,8 +240,11 @@ export default function App() {
   const validarToken = async (token) => {
     try {
       const data = await apiGet({ action: "validar_token", token });
-      if (data.valido) { setPromoAtual(data.promo); setTela("form"); }
-      else setTela("fechado");
+      if (data.valido) {
+        setPromoAtual(data.promo);
+        setContas([criarContaVazia(data.promo.tipo || "venda-conta")]);
+        setTela("form");
+      } else setTela("fechado");
     } catch { setTela("fechado"); }
   };
 
@@ -240,7 +264,6 @@ export default function App() {
       const data = await apiGet({ action: "listar_promos", senha: adminSenha });
       const lista = data.promos || [];
       setPromos(lista);
-      // Calcula stats localmente a partir das promos
       const ativas = lista.filter((p) => p.status === "ativa").length;
       const inativas = lista.filter((p) => p.status !== "ativa").length;
       setStats({ total: lista.length, ativas, inativas });
@@ -250,7 +273,10 @@ export default function App() {
   const criarPromo = async () => {
     if (!novaPromoNome.trim()) return;
     setAdminCarregando(true);
-    try { await apiPostNoReply({ action: "criar_promo", senha: adminSenha, nome: novaPromoNome.trim(), token: gerarToken() }); setNovaPromoNome(""); setTimeout(listarPromos, 1500); } catch { }
+    try {
+      await apiPostNoReply({ action: "criar_promo", senha: adminSenha, nome: novaPromoNome.trim(), token: gerarToken(), tipo: novaPromoTipo });
+      setNovaPromoNome(""); setTimeout(listarPromos, 1500);
+    } catch { }
     setAdminCarregando(false);
   };
   const togglePromo = async (token, statusAtual) => {
@@ -266,7 +292,7 @@ export default function App() {
   // ══════ FORM ══════
   const updateResp = (id, val) => setResp((p) => ({ ...p, [id]: val }));
   const updateConta = (contaId, campoId, val) => setContas(contas.map((ct) => ct.id === contaId ? { ...ct, [campoId]: val } : ct));
-  const addConta = () => { const n = criarContaVazia(); setContas([...contas, n]); setExpandido((p) => ({ ...p, [n.id]: true })); };
+  const addConta = () => { const n = criarContaVazia(tipoAtual); setContas([...contas, n]); setExpandido((p) => ({ ...p, [n.id]: true })); };
   const removeConta = (id) => { if (contas.length > 1) setContas(contas.filter((ct) => ct.id !== id)); };
   const toggleSenha = (key) => setSenhasVisiveis((p) => ({ ...p, [key]: !p[key] }));
   const toggleExpand = (id) => setExpandido((p) => ({ ...p, [id]: !p[id] }));
@@ -278,12 +304,13 @@ export default function App() {
   };
 
   const validar = () => {
-    for (const campo of CONFIG.camposResponsavel) {
-      const err = validarCelula(resp[campo.id], campo.tipo);
+    if (!tipoConfig) return "Tipo de formulário inválido.";
+    for (const campo of tipoConfig.camposResponsavel) {
+      const err = validarCelula(resp[campo.id], campo.tipo, campo.opcoes);
       if (err) return `${campo.label}: ${err}`;
     }
     for (let i = 0; i < contas.length; i++) {
-      for (const campo of CONFIG.camposConta) {
+      for (const campo of tipoConfig.camposConta) {
         if (!campoVisivel(campo, contas[i])) continue;
         const err = validarCelula(contas[i][campo.id], campo.tipo, campo.opcoes);
         if (err) return `Conta ${i + 1} — ${campo.label}: ${err}`;
@@ -294,8 +321,11 @@ export default function App() {
 
   const montarRows = () => contas.map((ct) => {
     const ctFinal = { ...ct };
-    if (ctFinal.cartaoClube === "Sim") ctFinal.cartaoMP = "";
-    return [agora(), ...rowParaArray(resp, ctFinal)];
+    // Zera campos condicionais que não se aplicam
+    tipoConfig?.camposConta.forEach((campo) => {
+      if (campo.condicional && !campoVisivel(campo, ctFinal)) ctFinal[campo.id] = "";
+    });
+    return [agora(), ...rowParaArray(COLUNAS, resp, ctFinal)];
   });
 
   const parsearImport = (texto) => {
@@ -322,7 +352,7 @@ export default function App() {
 
       if (ehCabecalho) {
         // Tenta mapear colunas por nome
-        const tentativa = mapearColunasPorHeader(celulas);
+        const tentativa = mapearColunasPorHeader(celulas, COLUNAS);
         if (Object.keys(tentativa).length >= Math.floor(COLUNAS.length * 0.5)) {
           mapaIdx = tentativa;
         }
@@ -407,7 +437,7 @@ export default function App() {
   const confirmarEnvio = async () => {
     setTela("enviando");
     try {
-      await apiPostNoReply({ action: "submit", linhas: rowsParaEnviar });
+      await apiPostNoReply({ action: "submit", aba: tipoConfig?.aba, linhas: rowsParaEnviar });
       setTela("sucesso");
     } catch { setTela("erro"); }
   };
@@ -418,7 +448,7 @@ export default function App() {
     if (!busca || busca.length < 3) { setConsultaErro("Digite pelo menos 3 caracteres."); return; }
     setConsultaErro(""); setConsultaSucesso(""); setConsultaCarregando(true); setConsultaResultado(null);
     try {
-      const data = await apiGet({ action: "consultar", busca });
+      const data = await apiGet({ action: "consultar", busca, aba: tipoConfig?.aba });
       if (data.linhas && data.linhas.length > 0) {
         setConsultaResultado(data.linhas.map((vals) => ({
           valores: vals.slice(0, -1),
@@ -431,22 +461,20 @@ export default function App() {
   const reenviarCorrecao = async (rowIndex, novosValores) => {
     setConsultaCarregando(true); setConsultaSucesso("");
     try {
-      await apiPostNoReply({ action: "atualizar", rowIndex, valores: novosValores });
+      await apiPostNoReply({ action: "atualizar", aba: tipoConfig?.aba, rowIndex, valores: novosValores });
       setConsultaSucesso("Dados atualizados!"); setConsultaResultado(null);
     } catch { setConsultaErro("Erro ao atualizar."); }
     setConsultaCarregando(false);
   };
 
   const resetar = () => {
-    setResp({}); setContas([criarContaVazia()]); setSenhasVisiveis({}); setExpandido({});
+    setResp({}); setContas([criarContaVazia(tipoAtual)]); setSenhasVisiveis({}); setExpandido({});
     setTextoImport(""); setPreviewRows([]); setPreviewErros([]);
     setErroMsg(""); setRowsParaEnviar([]); setTela("form");
   };
 
   const getNomeConta = (ct, idx) => ct.nomeTitular || `Conta ${idx + 1}`;
-
-  // Cabeçalho completo (com DATA)
-  const headerCompleto = ["DATA", ...COLUNAS_LABELS];
+  const headerCompleto = ["DATA", ...COLUNAS.map((c) => c.label.toUpperCase())];
 
   // ═════════════════
   // RENDER
@@ -548,6 +576,19 @@ export default function App() {
               <div style={{ background: "#fff", borderRadius: 14, padding: "22px", boxShadow: "0 1px 4px #00000010" }}>
                 <h3 style={{ fontFamily: "'Sora', sans-serif", fontSize: 16, fontWeight: 700, color: c.texto, marginBottom: 18 }}>Criar nova promoção</h3>
                 <div style={{ marginBottom: 14 }}>
+                  <label style={{ ...st.label, color: c.textoSuave, marginBottom: 6, display: "block" }}>Tipo de fornecedor</label>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                    {Object.entries(CONFIG.tipos).map(([key, val]) => (
+                      <button key={key}
+                        style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: `2px solid ${novaPromoTipo === key ? c.primaria : c.inputBorda}`, background: novaPromoTipo === key ? c.primaria : "transparent", color: novaPromoTipo === key ? c.destaque : c.textoSuave, fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer" }}
+                        onClick={() => setNovaPromoTipo(key)}>
+                        {val.emoji} {val.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{ fontSize: 11, color: c.textoSuave }}>{CONFIG.tipos[novaPromoTipo]?.descricao} · Aba: <strong>{CONFIG.tipos[novaPromoTipo]?.aba}</strong></p>
+                </div>
+                <div style={{ marginBottom: 14 }}>
                   <label style={{ ...st.label, color: c.textoSuave, marginBottom: 6, display: "block" }}>Nome da promoção</label>
                   <input style={{ ...st.input, background: "#fafaf6", borderColor: c.inputBorda, color: c.texto }}
                     placeholder="Ex: Smiles Maio 2026" value={novaPromoNome}
@@ -579,31 +620,31 @@ export default function App() {
                   </div>
                 )}
 
-                {promos.map((promo, i) => (
-                  <div key={i} style={{ padding: "16px 20px", borderTop: i > 0 ? "1px solid #f5f3ee" : "none", display: "flex", alignItems: "center", gap: 14 }}>
-                    {/* Status dot */}
-                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: promo.status === "ativa" ? "#16a34a" : "#d1d5db", flexShrink: 0 }} />
-
-                    {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: c.texto, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{promo.nome}</div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                        <span style={{ fontSize: 11, color: promo.status === "ativa" ? "#16a34a" : c.textoSuave, fontWeight: 600 }}>{promo.status === "ativa" ? "Ativa" : "Encerrada"}</span>
-                        <span style={{ fontSize: 11, color: "#ccc" }}>·</span>
-                        <code style={{ fontSize: 11, background: "#f5f3ee", padding: "2px 6px", borderRadius: 4, color: c.textoSuave }}>{promo.token}</code>
-                        {promo.data && <span style={{ fontSize: 11, color: "#ccc" }}>· {promo.data}</span>}
+                {promos.map((promo, i) => {
+                  const tp = CONFIG.tipos[promo.tipo] || CONFIG.tipos["venda-conta"];
+                  return (
+                    <div key={i} style={{ padding: "16px 20px", borderTop: i > 0 ? "1px solid #f5f3ee" : "none", display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: promo.status === "ativa" ? "#16a34a" : "#d1d5db", flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: c.texto, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{promo.nome}</div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                          <span style={{ fontSize: 11, color: promo.status === "ativa" ? "#16a34a" : c.textoSuave, fontWeight: 600 }}>{promo.status === "ativa" ? "Ativa" : "Encerrada"}</span>
+                          <span style={{ fontSize: 11, color: "#ccc" }}>·</span>
+                          <span style={{ fontSize: 11, color: c.primaria, fontWeight: 600 }}>{tp.emoji} {tp.label}</span>
+                          <span style={{ fontSize: 11, color: "#ccc" }}>·</span>
+                          <code style={{ fontSize: 11, background: "#f5f3ee", padding: "2px 6px", borderRadius: 4, color: c.textoSuave }}>{promo.token}</code>
+                          {promo.data && <span style={{ fontSize: 11, color: "#ccc" }}>· {promo.data}</span>}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        <button style={{ padding: "6px 12px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer", background: c.destaque, color: c.primaria }}
+                          onClick={() => copiarLink(promo.token)}>{copiado === promo.token ? "✓" : "🔗 Link"}</button>
+                        <button style={{ padding: "6px 12px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer", background: promo.status === "ativa" ? "#fef2f2" : "#f0fdf4", color: promo.status === "ativa" ? "#dc2626" : "#16a34a" }}
+                          onClick={() => togglePromo(promo.token, promo.status)}>{promo.status === "ativa" ? "⏸ Encerrar" : "▶ Reativar"}</button>
                       </div>
                     </div>
-
-                    {/* Actions */}
-                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                      <button style={{ padding: "6px 12px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer", background: c.destaque, color: c.primaria }}
-                        onClick={() => copiarLink(promo.token)}>{copiado === promo.token ? "✓" : "🔗 Link"}</button>
-                      <button style={{ padding: "6px 12px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer", background: promo.status === "ativa" ? "#fef2f2" : "#f0fdf4", color: promo.status === "ativa" ? "#dc2626" : "#16a34a" }}
-                        onClick={() => togglePromo(promo.token, promo.status)}>{promo.status === "ativa" ? "⏸ Encerrar" : "▶ Reativar"}</button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -614,7 +655,9 @@ export default function App() {
       {/* HERO */}
       {(tela === "form" || tela === "revisao") && (
         <section style={st.hero}>
-          <div style={{ ...st.promoTag, background: c.primaria, color: c.destaque }}>{promoAtual?.nome || "Promoção"}</div>
+          <div style={{ ...st.promoTag, background: c.primaria, color: c.destaque }}>
+            {tipoConfig?.emoji} {promoAtual?.nome || "Promoção"}
+          </div>
           <h1 style={{ ...st.title, color: c.primaria }}>{CONFIG.titulo}<br /><span style={{ ...st.titleAccent, color: c.destaque }}>{CONFIG.tituloDestaque}</span></h1>
           <p style={{ ...st.subtitle, color: c.textoSuave }}>{CONFIG.subtitulo}</p>
         </section>
@@ -650,7 +693,7 @@ export default function App() {
             <div style={{ ...st.card, background: c.cardFundo }}>
               <div style={st.cardIcon}>👤</div><h2 style={{ ...st.cardTitle, color: c.texto }}>Parceiro Responsável</h2>
               <div className="grid3" style={st.cardGrid3}>
-                {CONFIG.camposResponsavel.map((campo) => (
+                {(tipoConfig?.camposResponsavel || []).map((campo) => (
                   <Input key={campo.id} label={campo.label} value={resp[campo.id] || ""} placeholder={campo.placeholder} tipo={campo.tipo} cores={c}
                     onChange={(e) => updateResp(campo.id, formatador(campo.tipo, e.target.value))} />
                 ))}
@@ -674,7 +717,7 @@ export default function App() {
                 {isOpen && (
                   <div style={st.contaBody}>
                     <div className="grid2" style={st.cardGrid2}>
-                      {CONFIG.camposConta.map((campo) => {
+                      {(tipoConfig?.camposConta || []).map((campo) => {
                         if (!campoVisivel(campo, ct)) return null;
                         return (
                           <Input key={campo.id} label={campo.label} value={ct[campo.id] || ""} placeholder={campo.placeholder}
